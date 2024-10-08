@@ -1,0 +1,16 @@
+name: UrbanNav
+channels:
+  - defaults
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+  - pip:
+      - PyYAML
+      - numpy
+      - matplotlib
+      - scipy
+      - pytorch-lightning
