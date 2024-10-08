@@ -137,10 +137,10 @@ class CityWalkDataset(Dataset):
         original_input_poses = np.copy(input_poses)  # Store original poses before noise
 
         # Select target pose
-        target_pose = self.select_target_pose(future_poses)
+        target_pose, arrived = self.select_target_pose(future_poses)
 
         # Determine arrived label
-        arrived = self.determine_arrived_label(input_poses[-1, :3], target_pose[:3])
+        # arrived = self.determine_arrived_label(input_poses[-1, :3], target_pose[:3])
 
         # Extract waypoints
         waypoint_poses = self.extract_waypoints(pose, pose_start)
@@ -210,7 +210,8 @@ class CityWalkDataset(Dataset):
     def select_target_pose(self, future_poses):
         target_idx = random.randint(self.wp_length, future_poses.shape[0] - 1)
         target_pose = future_poses[target_idx]
-        return target_pose
+        arrvied = target_idx <= 5
+        return target_pose, arrvied
 
     def determine_arrived_label(self, current_pos, target_pos):
         distance_to_goal = np.linalg.norm(target_pos - current_pos, axis=0)

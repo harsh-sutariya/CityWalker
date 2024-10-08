@@ -51,7 +51,7 @@ data:
   num_test: 20
   input_noise: 0.01 # sigma in meter
   search_window: 50 
-  arrived_threshold: 1
+  arrived_threshold: 5 # num frame
 
 testing:
   num_visualize: 50
