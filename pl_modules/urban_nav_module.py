@@ -185,11 +185,11 @@ class UrbanNavModule(pl.LightningModule):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
         # Left axis: plot the current observation (frame) with arrived info in xlabel
-        xlabel = f"Arrived GT: {'True' if arrived_gt else 'False'}, Pred: {'True' if arrived_pred else 'False'}"
+        arrive_title = f"Arrived GT: {'True' if arrived_gt else 'False'}, Pred: {'True' if arrived_pred else 'False'}"
         ax1.imshow(frame)
         ax1.axis('off')
-        ax1.set_title('Current Observation')
-        ax1.set_xlabel(xlabel)
+        ax1.set_title(arrive_title)
+        # ax1.set_xlabel(arrive_title)
 
         # Right axis: plot the coordinates
         ax2.plot(original_input_positions[:, 0], original_input_positions[:, 1],
