@@ -151,6 +151,9 @@ class UrbanNavModule(pl.LightningModule):
         arrived_target = batch['arrived']
         wp_loss = F.mse_loss(wp_pred, waypoints_target)
         arrived_loss = F.binary_cross_entropy_with_logits(arrive_pred.flatten(), arrived_target)
+
+        wp_scale = waypoints_target[:, 0, :].norm(p=2, dim=1).mean()
+        wp_loss = wp_loss / wp_scale
         return {'waypoints_loss': wp_loss, 'arrived_loss': arrived_loss}
 
     def configure_optimizers(self):
