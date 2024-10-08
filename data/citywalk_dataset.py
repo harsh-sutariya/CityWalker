@@ -226,7 +226,8 @@ class CityWalkDataset(Dataset):
 
     def add_noise(self, input_poses):
         noise = np.random.normal(0, self.input_noise, input_poses[:, :3].shape)
-        input_poses[:, :3] += noise
+        scale = np.linalg.norm(input_poses[-1, :3] - input_poses[-2, :3])
+        input_poses[:, :3] += noise * scale
         return input_poses
 
     def process_frames(self, frames):
