@@ -85,7 +85,10 @@ def main():
         devices=cfg.training.gpus,
         precision='16-mixed' if cfg.training.amp else 32,
         accelerator='ddp' if cfg.training.gpus > 1 else 'gpu',
-        callbacks=[checkpoint_callback],
+        callbacks=[
+            checkpoint_callback,
+            pl.callbacks.TQDMProgressBar(refresh_rate=cfg.logging.pbar_rate),
+        ],
         log_every_n_steps=1,
         # num_sanity_val_steps=0
         # Other trainer arguments
