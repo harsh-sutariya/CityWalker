@@ -40,8 +40,8 @@ model:
 
 data:
   type: citywalk
-  video_dir: '/home/xinhao/citywalk/test_videos'
-  pose_dir: '/mnt/DATA/citywalk/test_output/saved_trajectories'
+  video_dir: '/home/xl3136/citywalk/test_videos'
+  pose_dir: '/home/xl3136/citywalk/test_poses'
   num_workers: 3
   pose_fps: 5
   video_fps: 30
@@ -51,10 +51,10 @@ data:
   num_test: 20
   input_noise: 0.01 # sigma in meter
   search_window: 50 
-  arrived_threshold: 5 
+  arrived_threshold: 1
 
 testing:
-  num_visualize: 10
+  num_visualize: 50
 
 logging:
   enable_wandb: true  # Set to false to disable Wandb logging
