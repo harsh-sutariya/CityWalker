@@ -71,14 +71,11 @@ def main():
         except ImportError:
             print("Wandb is not installed. Skipping Wandb logging.")
 
-    # Optionally, you can add a default logger like TensorBoardLogger
-    # If you want to have some logging even when Wandb is disabled, uncomment below:
-    #
-    # if logger is None:
-    #     from pytorch_lightning.loggers import TensorBoardLogger
-    #     tb_logger = TensorBoardLogger(save_dir=result_dir, name='tb_logs')
-    #     logger = tb_logger
-    #     print("TensorBoardLogger initialized.")
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        dirpath=os.path.join(result_dir, 'checkpoints'),
+        save_top_k=1,
+        monitor='val/total_loss',
+    )
     
     # Set up Trainer
     trainer = pl.Trainer(
@@ -88,9 +85,9 @@ def main():
         devices=cfg.training.gpus,
         precision='16-mixed' if cfg.training.amp else 32,
         accelerator='ddp' if cfg.training.gpus > 1 else 'gpu',
-        callbacks=[pl.callbacks.ModelCheckpoint(dirpath=os.path.join(result_dir, 'checkpoints'))],
+        callbacks=[checkpoint_callback],
         log_every_n_steps=1,
-        num_sanity_val_steps=0
+        # num_sanity_val_steps=0
         # Other trainer arguments
     )
 

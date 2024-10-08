@@ -1,32 +1,12 @@
 import os
 import numpy as np
 import torch
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import Dataset
 import torchvision.transforms.functional as TF
 from decord import VideoReader, cpu
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 import random
-
-class CityWalkSampler(Sampler):
-    def __init__(self, dataset):
-        self.dataset = dataset
-        self.indices = self.create_indices()
-
-    def create_indices(self):
-        indices = []
-        for start_idx, end_idx in self.dataset.video_ranges:
-            video_indices = list(range(start_idx, end_idx))
-            if self.dataset.mode == 'train':
-                random.shuffle(video_indices)
-            indices.extend(video_indices)
-        return indices
-
-    def __iter__(self):
-        return iter(self.indices)
-
-    def __len__(self):
-        return len(self.indices)
 
 class CityWalkDataset(Dataset):
     def __init__(self, cfg, mode):
@@ -44,6 +24,7 @@ class CityWalkDataset(Dataset):
         self.input_noise = cfg.data.input_noise
         self.search_window = cfg.data.search_window
         self.arrived_threshold = cfg.data.arrived_threshold
+        self.batch_size = cfg.training.batch_size
 
         # Load pose paths
         self.pose_path = [
@@ -86,90 +67,119 @@ class CityWalkDataset(Dataset):
         self.video_path = [self.video_path[i] for i in valid_indices]
         self.count = [self.count[i] for i in valid_indices]
 
-        # Build the look-up table and video_ranges
-        self.lut = []
-        self.video_ranges = []
-        idx_counter = 0
-        for video_idx, count in enumerate(self.count):
-            start_idx = idx_counter
-            for pose_start in range(count):
-                self.lut.append((video_idx, pose_start))
-                idx_counter += 1
-            end_idx = idx_counter
-            self.video_ranges.append((start_idx, end_idx))
-        assert len(self.lut) > 0, "No usable samples found."
+        # Build pose_start indices and frame indices per video
+        self.video_pose_starts = []
+        self.video_frame_indices = []
+        self.frame_multiplier = self.video_fps // self.target_fps
+
+        for video_idx, pose in enumerate(self.poses):
+            usable = self.count[video_idx]
+            pose_starts = list(range(usable))
+            self.video_pose_starts.append(pose_starts)
+
+            # For each pose_start, compute the frame indices needed
+            frame_indices_set = set()
+            for pose_start in pose_starts:
+                start_frame_idx = pose_start * self.frame_multiplier
+                indices = start_frame_idx + np.arange(self.context_size) * self.frame_multiplier
+                frame_indices_set.update(indices.tolist())
+
+            self.video_frame_indices.append(sorted(frame_indices_set))
 
     def __len__(self):
-        return len(self.lut)
+        return len(self.video_path)
 
-    def __getitem__(self, index):
-        video_idx, pose_start = self.lut[index]
+    def __getitem__(self, video_idx):
+        # Load frames for the video
+        self.video_reader = VideoReader(self.video_path[video_idx], ctx=cpu(0))
+        frame_indices = self.video_frame_indices[video_idx]
+        frames = self.video_reader.get_batch(frame_indices).asnumpy()
+        frame_idx_to_pos = {frame_idx: pos for pos, frame_idx in enumerate(frame_indices)}
 
-        # Initialize VideoReader for the current video
-        video_reader = VideoReader(self.video_path[video_idx], ctx=cpu(0))
-        frame_multiplier = self.video_fps // self.target_fps
-        start_frame_idx = pose_start * frame_multiplier
-        frame_indices = start_frame_idx + np.arange(self.context_size) * frame_multiplier
-
-        # Ensure frame indices are within the video length
-        num_frames = len(video_reader)
-        frame_indices = [min(idx, num_frames - 1) for idx in frame_indices]
-
-        # Load the required frames
-        frames = video_reader.get_batch(frame_indices).asnumpy()
-        video_reader = None  # Close the reader by removing reference
-
-        # Process frames
-        frames = self.process_frames(frames)
-
-        # Get pose data
+        # Get the pose data for the video
         pose = self.poses[video_idx]
+        pose_starts = self.video_pose_starts[video_idx]
 
-        # Get input and future poses
-        input_poses, future_poses = self.get_input_and_future_poses(pose, pose_start)
-        original_input_poses = np.copy(input_poses)  # Store original poses before noise
+        samples = []
 
-        # Select target pose
-        target_pose = self.select_target_pose(future_poses)
+        # For each pose_start, generate the sample data
+        for pose_start in pose_starts:
+            # Get input and future poses
+            input_poses, future_poses = self.get_input_and_future_poses(pose, pose_start)
+            original_input_poses = np.copy(input_poses)  # Store original poses before noise
 
-        # Determine arrived label
-        arrived = self.determine_arrived_label(input_poses[-1, :3], target_pose[:3])
+            # Select target pose
+            target_pose = self.select_target_pose(future_poses)
 
-        # Extract waypoints
-        waypoint_poses = self.extract_waypoints(pose, pose_start)
+            # Determine arrived label
+            arrived = self.determine_arrived_label(input_poses[-1, :3], target_pose[:3])
 
-        # Add noise if necessary
-        if self.input_noise > 0:
-            input_poses = self.add_noise(input_poses)
+            # Extract waypoints
+            waypoint_poses = self.extract_waypoints(pose, pose_start)
 
-        # Transform poses
-        current_pose = input_poses[-1]
-        transformed_input_positions = self.transform_poses(input_poses, current_pose)
-        transformed_original_input_positions = self.transform_poses(original_input_poses, current_pose)
-        waypoints_transformed = self.transform_waypoints(waypoint_poses, current_pose)
-        target_transformed = self.transform_target_pose(target_pose, current_pose)
+            # Add noise if necessary
+            if self.input_noise > 0:
+                input_poses = self.add_noise(input_poses)
 
-        # Convert data to tensors
-        input_positions = torch.tensor(transformed_input_positions[:, [0, 2]], dtype=torch.float32)
-        waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
-        arrived = torch.tensor(arrived, dtype=torch.float32)
-        sample = {
-            'video_frames': frames,
-            'input_positions': input_positions,
-            'waypoints': waypoints_transformed,
-            'arrived': arrived
-        }
+            # Load video frames
+            start_frame_idx = pose_start * self.frame_multiplier
+            indices = start_frame_idx + np.arange(self.context_size) * self.frame_multiplier
+            positions = [frame_idx_to_pos[frame_idx] for frame_idx in indices]
+            sample_frames = frames[positions]
 
-        # For visualization during validation
-        if self.mode == 'val':
-            original_input_positions = torch.tensor(transformed_original_input_positions[:, [0, 2]], dtype=torch.float32)
-            noisy_input_positions = torch.tensor(transformed_input_positions[:, [0, 2]], dtype=torch.float32)
-            target_transformed_position = torch.tensor(target_transformed[[0, 2]], dtype=torch.float32)  # Only X and Z
-            sample['original_input_positions'] = original_input_positions
-            sample['noisy_input_positions'] = noisy_input_positions
-            sample['gt_waypoints'] = waypoints_transformed
-            sample['target_transformed'] = target_transformed_position  # Add target coordinate
-        return sample
+            # Process frames
+            sample_frames = self.process_frames(sample_frames)
+
+            # Transform poses
+            current_pose = input_poses[-1]
+            transformed_input_positions = self.transform_poses(input_poses, current_pose)
+            transformed_original_input_positions = self.transform_poses(original_input_poses, current_pose)
+            waypoints_transformed = self.transform_waypoints(waypoint_poses, current_pose)
+            target_transformed = self.transform_target_pose(target_pose, current_pose)
+
+            # Convert data to tensors
+            input_positions = torch.tensor(transformed_input_positions[:, [0, 2]], dtype=torch.float32)
+            waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
+            arrived = torch.tensor(arrived, dtype=torch.float32)
+            sample = {
+                'video_frames': sample_frames,
+                'input_positions': input_positions,
+                'waypoints': waypoints_transformed,
+                'arrived': arrived
+            }
+
+            # For visualization during validation
+            if self.mode == 'val':
+                original_input_positions = torch.tensor(transformed_original_input_positions[:, [0, 2]], dtype=torch.float32)
+                noisy_input_positions = torch.tensor(transformed_input_positions[:, [0, 2]], dtype=torch.float32)
+                target_transformed_position = torch.tensor(target_transformed[[0, 2]], dtype=torch.float32)  # Only X and Z
+                sample['original_input_positions'] = original_input_positions
+                sample['noisy_input_positions'] = noisy_input_positions
+                sample['gt_waypoints'] = waypoints_transformed
+                sample['target_transformed'] = target_transformed_position  # Add target coordinate
+
+            samples.append(sample)
+
+        # Shuffle the samples
+        random.shuffle(samples)
+
+        # Group the samples into batches
+        batch_size = self.batch_size
+        batches = [samples[i:i + batch_size] for i in range(0, len(samples), batch_size)]
+
+        # Convert batches into list of dictionaries
+        batch_list = []
+        for batch_samples in batches:
+            batch = {}
+            # Stack tensors for each key
+            for key in batch_samples[0].keys():
+                if isinstance(batch_samples[0][key], torch.Tensor):
+                    batch[key] = torch.stack([s[key] for s in batch_samples], dim=0)
+                else:
+                    batch[key] = [s[key] for s in batch_samples]
+            batch_list.append(batch)
+
+        return batch_list
 
     def transform_poses(self, poses, current_pose_array):
         current_pose_matrix = self.pose_to_matrix(current_pose_array)
@@ -209,9 +219,10 @@ class CityWalkDataset(Dataset):
         return input_poses
 
     def process_frames(self, frames):
-        frames = torch.tensor(frames).permute(0, 3, 1, 2).float() / 255.0  # Corrected normalization
-        # frames = TF.resize(frames, [224, 224])
-        # frames = TF.normalize(frames, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        frames = torch.tensor(frames).permute(0, 3, 1, 2).float()
+        frames = frames.float() / 255.0
+        frames = TF.resize(frames, [224, 224])
+        frames = TF.normalize(frames, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         return frames
 
     def transform_waypoints(self, waypoint_poses, current_pose_array):

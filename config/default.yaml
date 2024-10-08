@@ -4,7 +4,7 @@ project:
   result_dir: 'results'
 
 training:
-  batch_size: 16
+  batch_size: 8
   max_epochs: 10
   gpus: 1
   amp: false
@@ -42,17 +42,18 @@ data:
   type: citywalk
   video_dir: '/home/xinhao/citywalk/test_videos'
   pose_dir: '/mnt/DATA/citywalk/test_output/saved_trajectories'
-  num_workers: 2
+  num_workers: 3
   pose_fps: 5
   video_fps: 30
   target_fps: 1
-  num_train: 12
-  num_val: 1
+  num_train: 60
+  num_val: 20
+  num_test: 20
   input_noise: 0.01 # sigma in meter
-  search_window: 500 
+  search_window: 50 
   arrived_threshold: 5 
 
-validation:
+testing:
   num_visualize: 10
 
 logging:
