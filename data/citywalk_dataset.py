@@ -99,14 +99,22 @@ class CityWalkDataset(Dataset):
             self.video_ranges.append((start_idx, end_idx))
         assert len(self.lut) > 0, "No usable samples found."
 
+        # Initialize the video reader cache per worker
+        self.video_reader_cache = {'video_idx': None, 'video_reader': None}
+
     def __len__(self):
         return len(self.lut)
 
     def __getitem__(self, index):
         video_idx, pose_start = self.lut[index]
 
-        # Initialize VideoReader for the current video
-        video_reader = VideoReader(self.video_path[video_idx], ctx=cpu(0))
+        # Retrieve or create the VideoReader for the current video
+        if self.video_reader_cache['video_idx'] != video_idx:
+            # Replace the old VideoReader with the new one
+            self.video_reader_cache['video_reader'] = VideoReader(self.video_path[video_idx], ctx=cpu(0))
+            self.video_reader_cache['video_idx'] = video_idx
+        video_reader = self.video_reader_cache['video_reader']
+
         frame_multiplier = self.video_fps // self.target_fps
         start_frame_idx = pose_start * frame_multiplier
         frame_indices = start_frame_idx + np.arange(self.context_size) * frame_multiplier
@@ -117,7 +125,6 @@ class CityWalkDataset(Dataset):
 
         # Load the required frames
         frames = video_reader.get_batch(frame_indices).asnumpy()
-        video_reader = None  # Close the reader by removing reference
 
         # Process frames
         frames = self.process_frames(frames)

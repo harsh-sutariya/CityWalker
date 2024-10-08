@@ -3,7 +3,7 @@
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 # from data.citywalk_dataset import CityWalkDataset
-from data.new_dataset import CityWalkDataset, CityWalkSampler
+from data.citywalk_dataset import CityWalkDataset, CityWalkSampler
 
 class CityWalkDataModule(pl.LightningDataModule):
     def __init__(self, cfg):
