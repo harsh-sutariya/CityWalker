@@ -151,15 +151,15 @@ class CityWalkDataset(Dataset):
 
         # Transform poses
         current_pose = input_poses[-1]
-        transformed_input_positions = self.transform_poses(input_poses, current_pose)
-        transformed_original_input_positions = self.transform_poses(original_input_poses, current_pose)
+        transformed_input_positions = self.input2target(input_poses, target_pose) 
         waypoints_transformed = self.transform_waypoints(waypoint_poses, current_pose)
-        target_transformed = self.transform_target_pose(target_pose, current_pose)
 
         # Convert data to tensors
-        input_positions = torch.tensor(transformed_input_positions[:, [0, 2]], dtype=torch.float32)
+        input_positions = torch.tensor(transformed_input_positions, dtype=torch.float32)
         waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
         arrived = torch.tensor(arrived, dtype=torch.float32)
+        # print(input_positions)
+        # print(arrived)
         sample = {
             'video_frames': frames,
             'input_positions': input_positions,
@@ -169,8 +169,12 @@ class CityWalkDataset(Dataset):
 
         # For visualization during validation
         if self.mode == 'val':
+            vis_input_positions = self.transform_poses(input_poses, current_pose)
+            transformed_original_input_positions = self.transform_poses(original_input_poses, current_pose)
+            target_transformed = self.transform_target_pose(target_pose, current_pose)
+
             original_input_positions = torch.tensor(transformed_original_input_positions[:, [0, 2]], dtype=torch.float32)
-            noisy_input_positions = torch.tensor(transformed_input_positions[:, [0, 2]], dtype=torch.float32)
+            noisy_input_positions = torch.tensor(vis_input_positions[:, [0, 2]], dtype=torch.float32)
             target_transformed_position = torch.tensor(target_transformed[[0, 2]], dtype=torch.float32)  # Only X and Z
             sample['original_input_positions'] = original_input_positions
             sample['noisy_input_positions'] = noisy_input_positions
@@ -193,9 +197,18 @@ class CityWalkDataset(Dataset):
         if future_poses.shape[0] == 0:
             raise IndexError(f"No future poses available for index {pose_start}.")
         return input_poses, future_poses
-
+    
+    def input2target(self, input_poses, target_pose):
+        input_positions = input_poses[:, :3]
+        target_position = target_pose[:3]
+        transformed_input_positions = input_positions - target_position
+        rand_angle = np.random.uniform(-np.pi, np.pi)
+        rot_matrix = np.array([[np.cos(rand_angle), -np.sin(rand_angle)], [np.sin(rand_angle), np.cos(rand_angle)]])
+        transformed_input_positions = transformed_input_positions[:, [0, 2]] @ rot_matrix.T
+        return transformed_input_positions
+    
     def select_target_pose(self, future_poses):
-        target_idx = random.randint(0, future_poses.shape[0] - 1)
+        target_idx = random.randint(self.wp_length, future_poses.shape[0] - 1)
         target_pose = future_poses[target_idx]
         return target_pose
 
