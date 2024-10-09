@@ -74,7 +74,7 @@ def main():
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(result_dir, 'checkpoints'),
         save_top_k=1,
-        monitor='val/total_loss',
+        monitor='val/l1_loss',
     )
     
     # Set up Trainer
