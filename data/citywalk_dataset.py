@@ -44,6 +44,7 @@ class CityWalkDataset(Dataset):
         self.input_noise = cfg.data.input_noise
         self.search_window = cfg.data.search_window
         self.arrived_threshold = cfg.data.arrived_threshold
+        self.arrived_prob = cfg.data.arrived_prob
 
         # Load pose paths
         self.pose_path = [
@@ -208,15 +209,19 @@ class CityWalkDataset(Dataset):
         return transformed_input_positions
     
     def select_target_pose(self, future_poses):
-        target_idx = random.randint(self.wp_length, future_poses.shape[0] - 1)
+        arrived = np.random.rand() < self.arrived_prob
+        if arrived:
+            target_idx = random.randint(self.wp_length, self.wp_length + self.arrived_threshold)
+        else:
+            target_idx = random.randint(self.wp_length + self.arrived_threshold, future_poses.shape[0] - 1)
         target_pose = future_poses[target_idx]
-        arrvied = target_idx <= self.wp_length + self.arrived_threshold
-        return target_pose, arrvied
+        print(arrived)
+        return target_pose, arrived
 
-    def determine_arrived_label(self, current_pos, target_pos):
-        distance_to_goal = np.linalg.norm(target_pos - current_pos, axis=0)
-        arrived = distance_to_goal <= self.arrived_threshold
-        return arrived
+    # def determine_arrived_label(self, current_pos, target_pos):
+    #     distance_to_goal = np.linalg.norm(target_pos - current_pos, axis=0)
+    #     arrived = distance_to_goal <= self.arrived_threshold
+    #     return arrived
 
     def extract_waypoints(self, pose, pose_start):
         waypoint_start = pose_start + self.context_size

@@ -52,9 +52,10 @@ data:
   input_noise: 0.1 # sigma (after normalization)
   search_window: 50 # frames
   arrived_threshold: 5 # num frame
+  arrived_prob: 0.3
 
 testing:
-  num_visualize: 50
+  num_visualize: 100
 
 logging:
   enable_wandb: true  # Set to false to disable Wandb logging
