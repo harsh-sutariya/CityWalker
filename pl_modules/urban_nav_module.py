@@ -42,14 +42,23 @@ class UrbanNavModule(pl.LightningModule):
         obs = batch['video_frames']
         cord = batch['input_positions']
         wp_pred, arrive_pred = self(obs, cord)
-        losses = self.compute_loss(wp_pred, arrive_pred, batch)
-        waypoints_loss = losses['waypoints_loss']
-        arrived_loss = losses['arrived_loss']
-        total_loss = waypoints_loss + arrived_loss
-        self.log('val/waypoints_loss', waypoints_loss, on_step=False, on_epoch=True, prog_bar=False)
-        self.log('val/arrived_loss', arrived_loss, on_step=False, on_epoch=True, prog_bar=False)
-        self.log('val/total_loss', total_loss, on_step=False, on_epoch=True, prog_bar=False)
         
+        # Compute L1 loss for waypoints
+        waypoints_target = batch['waypoints']
+        l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean')
+
+        # Compute accuracy for "arrived" prediction
+        arrived_target = batch['arrived']
+        arrived_logits = arrive_pred.flatten()
+        arrived_probs = torch.sigmoid(arrived_logits)
+        arrived_pred_binary = (arrived_probs >= 0.5).float()
+        correct = (arrived_pred_binary == arrived_target).float()
+        accuracy = correct.sum() / correct.numel()
+
+        # Log the metrics
+        self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val/arrived_accuracy', accuracy, on_step=False, on_epoch=True, prog_bar=True)
+
         if self.current_visualization_count < self.num_visualize:
             idx = 0  # You can iterate or select different indices as needed
             # Compute accuracy for "arrived" prediction
@@ -85,7 +94,7 @@ class UrbanNavModule(pl.LightningModule):
             )
             self.current_visualization_count += 1
         
-        return total_loss
+        return l1_loss
 
     def test_step(self, batch, batch_idx):
         obs = batch['video_frames']
@@ -106,7 +115,7 @@ class UrbanNavModule(pl.LightningModule):
 
         # Log the metrics
         self.log('test/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/rrived_accuracy', accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/arrived_accuracy', accuracy, on_step=False, on_epoch=True, prog_bar=True)
         print(f"Test Step: L1 Loss: {l1_loss.item()}, Accuracy: {accuracy.item()}")
 
         # Visualization
