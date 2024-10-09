@@ -210,7 +210,7 @@ class CityWalkDataset(Dataset):
     def select_target_pose(self, future_poses):
         target_idx = random.randint(self.wp_length, future_poses.shape[0] - 1)
         target_pose = future_poses[target_idx]
-        arrvied = target_idx <= 5
+        arrvied = target_idx <= self.wp_length + self.arrived_threshold
         return target_pose, arrvied
 
     def determine_arrived_label(self, current_pos, target_pos):
