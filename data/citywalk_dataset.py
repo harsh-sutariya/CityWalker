@@ -215,7 +215,6 @@ class CityWalkDataset(Dataset):
         else:
             target_idx = random.randint(self.wp_length + self.arrived_threshold, future_poses.shape[0] - 1)
         target_pose = future_poses[target_idx]
-        print(arrived)
         return target_pose, arrived
 
     # def determine_arrived_label(self, current_pos, target_pos):
