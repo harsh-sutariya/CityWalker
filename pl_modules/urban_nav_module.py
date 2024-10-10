@@ -44,8 +44,9 @@ class UrbanNavModule(pl.LightningModule):
         wp_pred, arrive_pred = self(obs, cord)
         
         # Compute L1 loss for waypoints
-        waypoints_target = batch['waypoints']
-        l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean')
+        # waypoints_target = batch['waypoints']
+        # l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean')
+        l1_loss = self.compute_loss(wp_pred, arrive_pred, batch)['waypoints_loss']
 
         # Compute accuracy for "arrived" prediction
         arrived_target = batch['arrived']
