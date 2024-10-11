@@ -33,9 +33,9 @@ class UrbanNavModule(pl.LightningModule):
         waypoints_loss = losses['waypoints_loss']
         arrived_loss = losses['arrived_loss']
         total_loss = waypoints_loss + arrived_loss
-        self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False)
-        self.log('train/l_arvd', arrived_loss, on_step=True, on_epoch=True, prog_bar=False)
-        self.log('train/loss', total_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log('train/l_arvd', arrived_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log('train/loss', total_loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         return total_loss
 
     def validation_step(self, batch, batch_idx):
@@ -57,8 +57,8 @@ class UrbanNavModule(pl.LightningModule):
         accuracy = correct.sum() / correct.numel()
 
         # Log the metrics
-        self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/arrived_accuracy', accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log('val/arrived_accuracy', accuracy, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
         if self.current_visualization_count < self.num_visualize:
             idx = 0  # You can iterate or select different indices as needed

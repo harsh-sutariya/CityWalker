@@ -6,6 +6,7 @@ import yaml
 import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
+from pytorch_lightning.strategies import DDPStrategy
 import torch
 torch.set_float32_matmul_precision('medium')
 
@@ -76,23 +77,40 @@ def main():
         save_top_k=1,
         monitor='val/l1_loss',
     )
+
+    num_gpu = torch.cuda.device_count()
+    # num_gpu = 1
     
     # Set up Trainer
-    trainer = pl.Trainer(
-        default_root_dir=result_dir,
-        max_epochs=cfg.training.max_epochs,
-        logger=logger,  # Pass the logger (WandbLogger or None)
-        devices=cfg.training.gpus,
-        precision='16-mixed' if cfg.training.amp else 32,
-        accelerator='ddp' if cfg.training.gpus > 1 else 'gpu',
-        callbacks=[
-            checkpoint_callback,
-            pl.callbacks.TQDMProgressBar(refresh_rate=cfg.logging.pbar_rate),
-        ],
-        log_every_n_steps=1,
-        # num_sanity_val_steps=0
-        # Other trainer arguments
-    )
+    if num_gpu > 1:
+        trainer = pl.Trainer(
+            default_root_dir=result_dir,
+            max_epochs=cfg.training.max_epochs,
+            logger=logger,  # Pass the logger (WandbLogger or None)
+            devices=num_gpu,
+            precision='16-mixed' if cfg.training.amp else 32,
+            accelerator='gpu',
+            callbacks=[
+                checkpoint_callback,
+                pl.callbacks.TQDMProgressBar(refresh_rate=cfg.logging.pbar_rate),
+            ],
+            log_every_n_steps=1,
+            strategy=DDPStrategy(find_unused_parameters=True)
+        )
+    else:
+        trainer = pl.Trainer(
+            default_root_dir=result_dir,
+            max_epochs=cfg.training.max_epochs,
+            logger=logger,  # Pass the logger (WandbLogger or None)
+            devices=num_gpu,
+            precision='16-mixed' if cfg.training.amp else 32,
+            accelerator='gpu',
+            callbacks=[
+                checkpoint_callback,
+                pl.callbacks.TQDMProgressBar(refresh_rate=cfg.logging.pbar_rate),
+            ],
+            log_every_n_steps=1,
+        )
 
     # Start training
     trainer.fit(model, datamodule=datamodule)
