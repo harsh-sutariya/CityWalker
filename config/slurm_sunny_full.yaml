@@ -56,8 +56,10 @@ data:
   arrived_threshold: 5 # num frame
   arrived_prob: 0.3
 
-testing:
+validation:
   num_visualize: 100
+testing:
+  num_visualize: 400
 
 logging:
   enable_wandb: true  # Set to false to disable Wandb logging
