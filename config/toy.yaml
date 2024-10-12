@@ -9,6 +9,7 @@ training:
   gpus: 1
   amp: false
   normalize_step_length: true
+  resume: true
 
 scheduler:
   name: 'cosine'

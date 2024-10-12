@@ -8,6 +8,7 @@ from pl_modules.citywalk_datamodule import CityWalkDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
 from pytorch_lightning.strategies import DDPStrategy
 import torch
+import glob
 torch.set_float32_matmul_precision('medium')
 
 
@@ -25,6 +26,7 @@ class DictNamespace(argparse.Namespace):
 def parse_args():
     parser = argparse.ArgumentParser(description='Train UrbanNav model')
     parser.add_argument('--config', type=str, default='config/default.yaml', help='Path to config file')
+    parser.add_argument('--checkpoint', type=str, default=None, help='Path to model checkpoint. If not provided, the latest checkpoint will be used.')
     args = parser.parse_args()
     return args
 
@@ -33,6 +35,30 @@ def load_config(config_path):
         cfg_dict = yaml.safe_load(f)
     cfg = DictNamespace(**cfg_dict)
     return cfg
+
+def find_latest_checkpoint(checkpoint_dir):
+    """
+    Finds the latest checkpoint in the given directory based on modification time.
+    
+    Args:
+        checkpoint_dir (str): Path to the directory containing checkpoints.
+    
+    Returns:
+        str: Path to the latest checkpoint file.
+    
+    Raises:
+        FileNotFoundError: If no checkpoint files are found in the directory.
+    """
+    print(checkpoint_dir)
+    checkpoint_pattern = os.path.join(checkpoint_dir, '*.ckpt')
+    checkpoint_files = glob.glob(checkpoint_pattern)
+    if not checkpoint_files:
+        raise FileNotFoundError(f"No checkpoint files found in directory: {checkpoint_dir}")
+    
+    # Sort checkpoints by modification time (latest first)
+    checkpoint_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    latest_checkpoint = checkpoint_files[0]
+    return latest_checkpoint
 
 def main():
     args = parse_args()
@@ -53,6 +79,28 @@ def main():
     # Initialize the model
     model = UrbanNavModule(cfg)
 
+    if cfg.training.resume:
+        # Determine the checkpoint path
+        try:
+            if args.checkpoint:
+                checkpoint_path = args.checkpoint
+                if not os.path.isfile(checkpoint_path):
+                    raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
+            else:
+                # Automatically find the latest checkpoint
+                checkpoint_dir = os.path.join(cfg.project.result_dir, 'checkpoints')
+                print(checkpoint_dir)
+                if not os.path.isdir(checkpoint_dir):
+                    raise FileNotFoundError(f"Checkpoint directory does not exist: {checkpoint_dir}")
+                checkpoint_path = find_latest_checkpoint(checkpoint_dir)
+                print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
+            model = UrbanNavModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
+            print(f"Loaded model from checkpoint: {checkpoint_path}")
+        except FileNotFoundError:
+            print("No checkpoint found. Training from scratch.")
+            checkpoint_path = None
+        
+    assert()
     # Initialize logger
     logger = None  # Default to no logger
 
