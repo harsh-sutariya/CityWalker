@@ -8,6 +8,7 @@ training:
   max_epochs: 10
   gpus: 1
   amp: false
+  normalize_step_length: true
 
 scheduler:
   name: 'cosine'
@@ -16,7 +17,7 @@ scheduler:
 
 optimizer:
   name: 'adamw'
-  lr: 5e-4
+  lr: 1e-4
 
 model:
   do_transform: true
@@ -54,8 +55,10 @@ data:
   arrived_threshold: 5 # num frame
   arrived_prob: 0.3
 
-testing:
+validation:
   num_visualize: 100
+testing:
+  num_visualize: 400
 
 logging:
   enable_wandb: true  # Set to false to disable Wandb logging
