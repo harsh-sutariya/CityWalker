@@ -100,7 +100,6 @@ def main():
             print("No checkpoint found. Training from scratch.")
             checkpoint_path = None
         
-    assert()
     # Initialize logger
     logger = None  # Default to no logger
 

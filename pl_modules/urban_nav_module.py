@@ -19,8 +19,7 @@ class UrbanNavModule(pl.LightningModule):
         # Visualization settings
         self.val_num_visualize = cfg.validation.num_visualize
         self.test_num_visualize = cfg.testing.num_visualize
-        self.current_val_visualization_count = 0
-        self.current_test_visualization_count = 0
+        self.vis_count = 0
         
         self.result_dir = cfg.project.result_dir
         self.batch_size = cfg.training.batch_size
@@ -117,10 +116,10 @@ class UrbanNavModule(pl.LightningModule):
         print(f"Test metrics saved to {test_metrics_path}")
 
     def on_validation_epoch_start(self):
-        self.current_val_visualization_count = 0
+        self.vis_count = 0
 
     def on_test_epoch_start(self):
-        self.current_test_visualization_count = 0
+        self.vis_count = 0
 
     def compute_loss(self, wp_pred, arrive_pred, batch):
         waypoints_target = batch['waypoints']
@@ -172,11 +171,9 @@ class UrbanNavModule(pl.LightningModule):
         """
         if mode == 'val':
             num_visualize = self.val_num_visualize
-            current_count = self.current_val_visualization_count
             vis_dir = os.path.join(self.result_dir, 'val_vis', f'epoch_{self.current_epoch}')
         elif mode == 'test':
             num_visualize = self.test_num_visualize
-            current_count = self.current_test_visualization_count
             vis_dir = os.path.join(self.result_dir, 'test_vis')
         else:
             raise ValueError("Mode should be either 'val' or 'test'.")
@@ -185,12 +182,8 @@ class UrbanNavModule(pl.LightningModule):
 
         batch_size = obs.size(0)
         for idx in range(batch_size):
-            if mode == 'val':
-                if current_count >= num_visualize:
-                    break
-            elif mode == 'test':
-                if current_count >= num_visualize:
-                    break
+            if self.vis_count >= num_visualize:
+                break
 
             # Extract necessary data
             arrived_target = batch['arrived'][idx].item()
@@ -246,12 +239,8 @@ class UrbanNavModule(pl.LightningModule):
             ax2.grid(True)
 
             # Save the plot
-            output_path = os.path.join(vis_dir, f'sample_{current_count}.png')
+            output_path = os.path.join(vis_dir, f'sample_{self.vis_count}.png')
             plt.savefig(output_path)
             plt.close(fig)
 
-            # Update visualization count
-            if mode == 'val':
-                self.current_val_visualization_count += 1
-            elif mode == 'test':
-                self.current_test_visualization_count += 1
+            self.vis_count += 1

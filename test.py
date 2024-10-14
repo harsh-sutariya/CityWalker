@@ -9,13 +9,6 @@ from pl_modules.urban_nav_module import UrbanNavModule
 import torch
 import glob
 
-# Optional: If you use Wandb for logging during testing
-try:
-    from pytorch_lightning.loggers import WandbLogger
-    WANDB_AVAILABLE = True
-except ImportError:
-    WANDB_AVAILABLE = False
-
 torch.set_float32_matmul_precision('medium')
 
 
@@ -100,19 +93,13 @@ def main():
     model.result_dir = test_dir
     print(f"Loaded model from checkpoint: {checkpoint_path}")
 
-    # Define callbacks
-    callbacks = [
-        pl.callbacks.TQDMProgressBar(refresh_rate=cfg.logging.pbar_rate),
-    ]
-
     # Initialize Trainer
     trainer = pl.Trainer(
         default_root_dir=test_dir,
         devices=cfg.training.gpus,
         precision='16-mixed' if cfg.training.amp else 32,
         accelerator='ddp' if cfg.training.gpus > 1 else 'gpu',
-        callbacks=callbacks,
-        log_every_n_steps=1,
+        logger=False
         # You can add more Trainer arguments if needed
     )
 
