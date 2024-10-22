@@ -21,7 +21,8 @@ optimizer:
   lr: 1e-4
 
 model:
-  do_transform: true
+  do_rgb_normalize: true
+  do_resize: true
   obs_encoder:
     type: 'efficientnet-b0'
     context_size: 5

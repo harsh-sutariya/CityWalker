@@ -5,6 +5,7 @@ import argparse
 import yaml
 import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
+from pl_modules.urbannav_datamodule import UrbanNavDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
 from pytorch_lightning.strategies import DDPStrategy
 import torch
@@ -74,7 +75,12 @@ def main():
         yaml.dump(cfg.__dict__, f)
 
     # Initialize the DataModule
-    datamodule = CityWalkDataModule(cfg)
+    if cfg.data.type == 'citywalk':
+        datamodule = CityWalkDataModule(cfg)
+    elif cfg.data.type == 'urbannav':
+        datamodule = UrbanNavDataModule(cfg)
+    else:
+        raise ValueError(f"Invalid dataset: {cfg.data.dataset}")
 
     # Initialize the model
     model = UrbanNavModule(cfg)

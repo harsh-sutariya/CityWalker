@@ -19,8 +19,9 @@ class UrbanNav(nn.Module):
         self.decoder_type = cfg.model.decoder.type
         self.encoder_feat_dim = cfg.model.encoder_feat_dim
         self.len_traj_pred = cfg.model.decoder.len_traj_pred
-        self.do_transform = cfg.model.do_transform
-        if self.do_transform:
+        self.do_rgb_normalize = cfg.model.do_rgb_normalize
+        self.do_resize = cfg.model.do_resize
+        if self.do_rgb_normalize:
             self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
             self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
@@ -72,11 +73,11 @@ class UrbanNav(nn.Module):
         """
         B, N, _, H, W = obs.shape
         obs = obs.view(B * N, 3, H, W)
-        if self.do_transform:
-            # Resize and normalize the image using PyTorch functional methods
-            # obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
-            # Normalize the image
+        if self.do_rgb_normalize:
             obs = (obs - self.mean) / self.std
+        if self.do_resize:
+            obs = F.interpolate(obs, size=(360, 640), mode='bilinear', align_corners=False)
+            
         
         if self.obs_encoder_type .split("-")[0] == "efficientnet":
             obs_enc = self.obs_encoder.extract_features(obs)
