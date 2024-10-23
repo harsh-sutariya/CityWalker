@@ -84,6 +84,7 @@ def main():
 
     # Initialize the model
     model = UrbanNavModule(cfg)
+    print(pl.utilities.model_summary.ModelSummary(model, max_depth=2))
 
     if cfg.training.resume:
         # Determine the checkpoint path

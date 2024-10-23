@@ -10,6 +10,7 @@ training:
   amp: false
   normalize_step_length: true
   resume: false
+  direction_loss_weight: 1.0
 
 scheduler:
   name: 'cosine'
@@ -24,21 +25,22 @@ model:
   do_rgb_normalize: true
   do_resize: true
   obs_encoder:
-    type: 'efficientnet-b0'
+    type: 'vit_b_16'
     context_size: 5
+  output_coordinate_repr: 'polar'
 
   cord_embedding:
     type: 'polar'
     num_freqs: 6
     include_input: true
 
-  encoder_feat_dim: 512
+  encoder_feat_dim: 1024
 
   decoder:
     type: 'attention'
     len_traj_pred: 5
-    num_heads: 2
-    num_layers: 2
+    num_heads: 8
+    num_layers: 16
     ff_dim_factor: 4
 
 data:
