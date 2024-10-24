@@ -159,7 +159,10 @@ def main():
                 if not os.path.isdir(checkpoint_dir):
                     raise FileNotFoundError(f"Checkpoint directory does not exist: {checkpoint_dir}")
                 checkpoint_path = os.path.join(checkpoint_dir, 'last.ckpt')
-                print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
+                if not os.path.isfile(checkpoint_path):
+                    raise FileNotFoundError()
+                else:
+                    print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
             print(f"Training resume from checkpoint: {checkpoint_path}")
         except FileNotFoundError:
             print("No checkpoint found. Training from scratch.")
