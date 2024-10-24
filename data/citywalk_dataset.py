@@ -81,7 +81,7 @@ class CityWalkDataset(Dataset):
                 first_nan_idx = np.argmin(pose_nan)
                 pose = pose[:first_nan_idx]
             self.poses.append(pose)
-            usable = pose.shape[0] - self.context_size - max(self.search_window, self.wp_length)
+            usable = pose.shape[0] - self.context_size - max(self.arrived_threshold*2, self.wp_length)
             self.count.append(max(usable, 0))  # Ensure non-negative
 
         # Remove pose files with zero usable samples
@@ -96,7 +96,7 @@ class CityWalkDataset(Dataset):
         idx_counter = 0
         for video_idx, count in enumerate(self.count):
             start_idx = idx_counter
-            for pose_start in range(count):
+            for pose_start in range(0, count, self.context_size):
                 self.lut.append((video_idx, pose_start))
                 idx_counter += 1
             end_idx = idx_counter
