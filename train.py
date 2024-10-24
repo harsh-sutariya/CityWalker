@@ -85,27 +85,6 @@ def main():
     # Initialize the model
     model = UrbanNavModule(cfg)
     print(pl.utilities.model_summary.ModelSummary(model, max_depth=2))
-
-    if cfg.training.resume:
-        # Determine the checkpoint path
-        try:
-            if args.checkpoint:
-                checkpoint_path = args.checkpoint
-                if not os.path.isfile(checkpoint_path):
-                    raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
-            else:
-                # Automatically find the latest checkpoint
-                checkpoint_dir = os.path.join(cfg.project.result_dir, 'checkpoints')
-                print(checkpoint_dir)
-                if not os.path.isdir(checkpoint_dir):
-                    raise FileNotFoundError(f"Checkpoint directory does not exist: {checkpoint_dir}")
-                checkpoint_path = find_latest_checkpoint(checkpoint_dir)
-                print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
-            model = UrbanNavModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
-            print(f"Loaded model from checkpoint: {checkpoint_path}")
-        except FileNotFoundError:
-            print("No checkpoint found. Training from scratch.")
-            checkpoint_path = None
         
     # Initialize logger
     logger = None  # Default to no logger
@@ -128,6 +107,7 @@ def main():
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(result_dir, 'checkpoints'),
+        save_last=True,
         save_top_k=1,
         monitor='val/l1_loss',
     )
@@ -166,8 +146,28 @@ def main():
             log_every_n_steps=1,
         )
 
-    # Start training
-    trainer.fit(model, datamodule=datamodule)
+    if cfg.training.resume:
+        # Determine the checkpoint path
+        try:
+            if args.checkpoint:
+                checkpoint_path = args.checkpoint
+                if not os.path.isfile(checkpoint_path):
+                    raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
+            else:
+                # Automatically find the latest checkpoint
+                checkpoint_dir = os.path.join(cfg.project.result_dir, 'checkpoints')
+                if not os.path.isdir(checkpoint_dir):
+                    raise FileNotFoundError(f"Checkpoint directory does not exist: {checkpoint_dir}")
+                checkpoint_path = os.path.join(checkpoint_dir, 'last.ckpt')
+                print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
+            print(f"Training resume from checkpoint: {checkpoint_path}")
+        except FileNotFoundError:
+            print("No checkpoint found. Training from scratch.")
+            checkpoint_path = None
+        trainer.fit(model, datamodule=datamodule, ckpt_path=checkpoint_path)
+    else:
+        # Start training
+        trainer.fit(model, datamodule=datamodule)
 
 if __name__ == '__main__':
     main()
