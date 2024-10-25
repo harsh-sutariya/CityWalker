@@ -86,7 +86,10 @@ class UrbanNav(nn.Module):
         if self.do_rgb_normalize:
             obs = (obs - self.mean) / self.std
         if self.do_resize:
-            obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
+            if self.obs_encoder_type.startswith("vit"):
+                obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
+            else:
+                obs = F.interpolate(obs, size=(400, 400), mode='bilinear', align_corners=False)
 
         # Observation Encoding
         if self.obs_encoder_type.startswith("efficientnet"):
