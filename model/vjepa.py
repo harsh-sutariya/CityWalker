@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import copy
 from torchvision import models
 from efficientnet_pytorch import EfficientNet
+from model.model_utils import JEPAPredictor
 
 class ImageEncoder(nn.Module):
     def __init__(self, cfg):
@@ -41,6 +42,10 @@ class ImageEncoder(nn.Module):
         else:
             self.compress_obs_enc = nn.Identity()
 
+        # print(self.num_obs_features)
+        # print(self.encoder_feat_dim)
+        # assert()
+
     def forward(self, obs):
         """
         Args:
@@ -48,11 +53,6 @@ class ImageEncoder(nn.Module):
         Returns:
             embeddings: (B*N, encoder_feat_dim)
         """
-        # Pre-processing
-        if self.do_rgb_normalize:
-            obs = (obs - self.mean) / self.std
-        if self.do_resize:
-            obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
 
         # Observation Encoding
         if self.obs_encoder_type.startswith("efficientnet"):
@@ -83,42 +83,78 @@ class ImageEncoder(nn.Module):
 class VideoJEPA(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-
+        self.cfg = cfg
+        self.do_rgb_normalize = cfg.model.do_rgb_normalize
+        self.do_resize = cfg.model.do_resize
+        self.obs_encoder_type = cfg.model.obs_encoder.type
+        if self.do_rgb_normalize:
+            self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+            self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+            
         # Initialize the online encoder
         self.online_encoder = ImageEncoder(cfg)
 
         # Initialize the target encoder as a copy of the online encoder
         self.target_encoder = copy.deepcopy(self.online_encoder)
-        # Freeze the target encoder parameters (they will be updated via EMA)
         for param in self.target_encoder.parameters():
             param.requires_grad = False
 
+        # Initialize the predictor using the decoder from UrbanNav
+        # Assuming UrbanNav's decoder is compatible as a predictor
+        # You might need to adjust the parameters based on the actual UrbanNav decoder implementation
+        if cfg.model.decoder.type == "attention":
+            self.predictor = JEPAPredictor(
+                embed_dim=self.online_encoder.encoder_feat_dim,
+                seq_len=cfg.model.obs_encoder.context_size,
+                nhead=cfg.model.decoder.num_heads,
+                num_layers=cfg.model.decoder.num_layers,
+                ff_dim_factor=cfg.model.decoder.ff_dim_factor,
+            )
+        else:
+            raise NotImplementedError(f"Decoder type {cfg.model.decoder.type} not implemented")
+
     @torch.no_grad()
-    def update_target_encoder(self, decay=0.998):
-        # EMA update for the target encoder
+    def update_target_encoder(self, m):
         for param_o, param_t in zip(self.online_encoder.parameters(), self.target_encoder.parameters()):
-            param_t.data.mul_(decay).add_(param_o.data * (1 - decay))
+            param_t.data.mul_(m).add_((1. - m) * param_o.data)
 
     def forward(self, input_obs, target_obs):
         """
         Args:
-            input_obs: (B, N_in, 3, H, W) tensor of past frames
-            target_obs: (B, N_target, 3, H, W) tensor of future frames
+            input_obs: (B, N_in, 3, H, W) tensor of input frames
+            target_obs: (B, N_target, 3, H, W) tensor of target frames
         Returns:
-            online_embeddings: (B, N_in, encoder_feat_dim)
+            predicted_embeddings: (B, N_target, encoder_feat_dim)
             target_embeddings: (B, N_target, encoder_feat_dim)
         """
-        # Process input observations through online encoder
         B, N_in, C, H, W = input_obs.shape
-        input_obs_flat = input_obs.view(B * N_in, C, H, W)
-        online_embeddings_flat = self.online_encoder(input_obs_flat)
-        online_embeddings = online_embeddings_flat.view(B, N_in, -1)
+        B, N_target, C, H, W = target_obs.shape
+        input_obs = input_obs.view(B * N_in, C, H, W)
+        target_obs = target_obs.view(B * N_target, C, H, W)
+        if self.do_rgb_normalize:
+            input_obs = (input_obs - self.mean) / self.std
+            target_obs = (target_obs - self.mean) / self.std
+        if self.do_resize:
+            if self.obs_encoder_type.startswith("vit"):
+                input_obs = F.interpolate(input_obs, size=(224, 224), mode='bilinear', align_corners=False)
+                target_obs = F.interpolate(target_obs, size=(224, 224), mode='bilinear', align_corners=False)
+            else:
+                input_obs = F.interpolate(input_obs, size=(400, 400), mode='bilinear', align_corners=False)
+                target_obs = F.interpolate(target_obs, size=(400, 400), mode='bilinear', align_corners=False)
 
-        # Process target observations through target encoder with stop gradient
-        with torch.no_grad():
-            B, N_target, C, H, W = target_obs.shape
-            target_obs_flat = target_obs.view(B * N_target, C, H, W)
-            target_embeddings_flat = self.target_encoder(target_obs_flat)
-            target_embeddings = target_embeddings_flat.view(B, N_target, -1)
+        online_embeddings_flat = self.online_encoder(input_obs)  # (B*N_in, encoder_feat_dim)
+        online_embeddings = online_embeddings_flat.view(B, N_in, -1)  # (B, N_in, encoder_feat_dim)
+        # print(online_embeddings.size())
 
-        return online_embeddings, target_embeddings
+        # Predict target embeddings using the predictor (decoder)
+        # The predictor takes the sequence of input embeddings and predicts the sequence of target embeddings
+        predicted_embeddings = self.predictor(online_embeddings)  # (B, N_target, hidden_dim)
+        # print(predicted_embeddings.size())
+
+        # Encode target observations through target encoder
+        target_embeddings_flat = self.target_encoder(target_obs)  # (B*N_target, encoder_feat_dim)
+        target_embeddings = target_embeddings_flat.view(B, N_target, -1)  # (B, N_target, encoder_feat_dim)
+        # print(target_embeddings.size())
+        # assert()
+
+        return predicted_embeddings, target_embeddings

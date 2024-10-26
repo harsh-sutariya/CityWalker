@@ -26,16 +26,22 @@ model:
   do_rgb_normalize: true
   do_resize: true
   obs_encoder:
-    type: 'vit_l_16'
+    type: 'resnet50'
     context_size: 5
     target_size: 5
   encoder_feat_dim: 1024
   ema_range: [0.998, 1]
+  decoder:
+    type: 'attention'
+    len_traj_pred: 5
+    num_heads: 8
+    num_layers: 16
+    ff_dim_factor: 4
 
 data:
   type: citywalk
   video_dir: '/home/xinhao/citywalk/test_videos'
-  num_workers: 6
+  num_workers: 3
   pose_fps: 5
   video_fps: 30
   target_fps: 1
