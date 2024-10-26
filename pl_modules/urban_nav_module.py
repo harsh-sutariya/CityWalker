@@ -386,5 +386,5 @@ class UrbanNavModule(pl.LightningModule):
         # Compute relative differences
         deltas = torch.diff(waypoints, dim=1, prepend=torch.zeros_like(waypoints[:, :1, :]))
         distance = torch.norm(deltas, dim=2)
-        angle = torch.atan2(deltas[:, :, 1], deltas[:, :, 0]) * 180 / torch.pi
+        angle = torch.atan2(deltas[:, :, 1], deltas[:, :, 0])
         return distance, angle
