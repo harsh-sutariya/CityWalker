@@ -155,7 +155,12 @@ class CityWalkDataset(Dataset):
 
         # Transform poses
         current_pose = input_poses[-1]
-        transformed_input_positions = self.input2target(input_poses, target_pose) 
+        if self.cfg.model.cord_embedding.type == 'polar':
+            transformed_input_positions = self.input2target(input_poses, target_pose)
+        elif self.cfg.model.cord_embedding.type == 'target':
+            transformed_input_positions = self.transform_target_pose(target_pose, current_pose)[np.newaxis, [0, 2]]
+        else:
+            raise NotImplementedError(f"Coordinate embedding type {self.cfg.model.cord_embedding} not implemented")
         waypoints_transformed = self.transform_waypoints(waypoint_poses, current_pose)
 
         # Convert data to tensors
