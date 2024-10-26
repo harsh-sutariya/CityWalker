@@ -16,6 +16,11 @@ class UrbanNavModule(pl.LightningModule):
         self.save_hyperparameters(cfg)
         self.do_normalize = cfg.training.normalize_step_length
         
+        # Coordinate representation
+        self.output_coordinate_repr = cfg.model.output_coordinate_repr
+        if self.output_coordinate_repr not in ["euclidean", "polar"]:
+            raise ValueError(f"Unsupported coordinate representation: {self.output_coordinate_repr}")
+        
         # Direction loss weight (you can adjust this value in your cfg)
         self.direction_loss_weight = cfg.training.direction_loss_weight
         
@@ -29,22 +34,41 @@ class UrbanNavModule(pl.LightningModule):
         self.image_mean = np.array([0.485, 0.456, 0.406])
         self.image_std = np.array([0.229, 0.224, 0.225])
         
-        # Initialize list to store test metrics
-        self.test_metrics = {'l1_loss': [], 'arrived_accuracy': [], 'mean_angle': []}
-        
+        # If polar, define additional loss weights
+        if self.output_coordinate_repr == "polar":
+            self.distance_loss_weight = cfg.training.distance_loss_weight
+            self.angle_loss_weight = cfg.training.angle_loss_weight
+
     def forward(self, obs, cord):
         return self.model(obs, cord)
-
+    
     def training_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        wp_pred, arrive_pred = self(obs, cord)
-        losses = self.compute_loss(wp_pred, arrive_pred, batch)
-        waypoints_loss = losses['waypoints_loss']
-        arrived_loss = losses['arrived_loss']
-        direction_loss = losses['direction_loss']
-        total_loss = waypoints_loss + arrived_loss + self.direction_loss_weight * direction_loss
-        self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        
+        if self.output_coordinate_repr == "euclidean":
+            wp_pred, arrive_pred = self(obs, cord)
+            losses = self.compute_loss(wp_pred, arrive_pred, batch)
+            waypoints_loss = losses['waypoints_loss']
+            arrived_loss = losses['arrived_loss']
+            direction_loss = losses['direction_loss']
+            total_loss = waypoints_loss + arrived_loss + self.direction_loss_weight * direction_loss
+            self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        elif self.output_coordinate_repr == "polar":
+            wp_pred_euclidean, arrive_pred, distance_pred, angle_pred = self(obs, cord)
+            losses = self.compute_loss_polar(wp_pred_euclidean, distance_pred, angle_pred, arrive_pred, batch)
+            distance_loss = losses['distance_loss']
+            angle_loss = losses['angle_loss']
+            arrived_loss = losses['arrived_loss']
+            direction_loss = losses['direction_loss']
+            total_loss = (self.distance_loss_weight * distance_loss +
+                          self.angle_loss_weight * angle_loss +
+                          arrived_loss +
+                          self.direction_loss_weight * direction_loss)
+            self.log('train/l_distance', distance_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log('train/l_angle', angle_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        
+        # Common logs
         self.log('train/l_arvd', arrived_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         self.log('train/l_dir', direction_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         self.log('train/loss', total_loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
@@ -53,13 +77,21 @@ class UrbanNavModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        wp_pred, arrive_pred = self(obs, cord)
         
-        # Compute losses
-        losses = self.compute_loss(wp_pred, arrive_pred, batch)
-        l1_loss = losses['waypoints_loss']
-        direction_loss = losses['direction_loss']
-
+        if self.output_coordinate_repr == "euclidean":
+            wp_pred, arrive_pred = self(obs, cord)
+            losses = self.compute_loss(wp_pred, arrive_pred, batch)
+            l1_loss = losses['waypoints_loss']
+            direction_loss = losses['direction_loss']
+            self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+            
+        elif self.output_coordinate_repr == "polar":
+            wp_pred, arrive_pred, distance_pred, angle_pred = self(obs, cord)
+            losses = self.compute_loss_polar(wp_pred, distance_pred, angle_pred, arrive_pred, batch)
+            direction_loss = losses['direction_loss']
+            self.log('val/distance_loss', losses['distance_loss'], on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log('val/angle_loss', losses['angle_loss'], on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        
         # Compute accuracy for "arrived" prediction
         arrived_target = batch['arrived']
         arrived_logits = arrive_pred.flatten()
@@ -67,12 +99,11 @@ class UrbanNavModule(pl.LightningModule):
         arrived_pred_binary = (arrived_probs >= 0.5).float()
         correct = (arrived_pred_binary == arrived_target).float()
         accuracy = correct.sum() / correct.numel()
-
+        
         # Log the metrics
-        self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         self.log('val/arrived_accuracy', accuracy, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         self.log('val/direction_loss', direction_loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-
+        
         # Handle visualization
         self.process_visualization(
             mode='val',
@@ -82,17 +113,23 @@ class UrbanNavModule(pl.LightningModule):
             arrive_pred=arrive_pred
         )
         
-        return l1_loss
+        return direction_loss
 
     def test_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        wp_pred, arrive_pred = self(obs, cord)
-
-        # Compute L1 loss for waypoints
-        waypoints_target = batch['waypoints']
-        l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean').item()
-
+        
+        if self.output_coordinate_repr == "euclidean":
+            wp_pred, arrive_pred = self(obs, cord)
+            # Compute L1 loss for waypoints
+            waypoints_target = batch['waypoints']
+            l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean').item()
+        elif self.output_coordinate_repr == "polar":
+            wp_pred, arrive_pred, distance_pred, angle_pred = self(obs, cord)
+            waypoints_target = batch['waypoints']
+            distance_loss, angle_loss, _, _ = self.compute_loss_polar(wp_pred, distance_pred, angle_pred, arrive_pred, batch)
+            
+        
         # Compute accuracy for "arrived" prediction
         arrived_target = batch['arrived']
         arrived_logits = arrive_pred.flatten()
@@ -101,57 +138,78 @@ class UrbanNavModule(pl.LightningModule):
         correct = (arrived_pred_binary == arrived_target).float()
         accuracy = correct.sum().item() / correct.numel()
 
-        # Compute angle between last predicted and ground truth waypoints
         wp_pred_last = wp_pred[:, -1, :]  # shape [batch_size, 2]
-        wp_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
+        waypoints_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
 
         # Compute cosine similarity
-        dot_product = (wp_pred_last * wp_target_last).sum(dim=1)  # shape [batch_size]
+        dot_product = (wp_pred_last * waypoints_target_last).sum(dim=1)  # shape [batch_size]
         norm_pred = wp_pred_last.norm(dim=1)  # shape [batch_size]
-        norm_target = wp_target_last.norm(dim=1)  # shape [batch_size]
+        norm_target = waypoints_target_last.norm(dim=1)  # shape [batch_size]
         cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
-
+        
         # Compute angle in degrees
         angle = torch.acos(cos_sim.clamp(-1+1e-7, 1-1e-7)) * 180 / torch.pi  # shape [batch_size]
-
+        
         # Take mean angle
         mean_angle = angle.mean().item()
-
+        
         # Store the metrics
-        self.test_metrics['l1_loss'].append(l1_loss)
+        if self.output_coordinate_repr == "euclidean":
+            self.test_metrics['l1_loss'].append(l1_loss)
+        elif self.output_coordinate_repr == "polar":
+            self.test_metrics['distance_loss'].append(distance_loss)
+            self.test_metrics['angle_loss'].append(angle_loss)
         self.test_metrics['arrived_accuracy'].append(accuracy)
         self.test_metrics['mean_angle'].append(mean_angle)
-
+        
         # Handle visualization
-        self.process_visualization(
-            mode='test',
-            batch=batch,
-            obs=obs,
-            wp_pred=wp_pred,
-            arrive_pred=arrive_pred
-        )
+        if self.output_coordinate_repr == "euclidean":
+            self.process_visualization(
+                mode='test',
+                batch=batch,
+                obs=obs,
+                wp_pred=wp_pred,
+                arrive_pred=arrive_pred
+            )
+        elif self.output_coordinate_repr == "polar":
+            self.process_visualization(
+                mode='test',
+                batch=batch,
+                obs=obs,
+                wp_pred=wp_pred,
+                arrive_pred=arrive_pred
+            )
 
     def on_test_epoch_end(self):
         # Save the test metrics to a .npy file
-        l1_loss_array = np.array(self.test_metrics['l1_loss'])
-        accuracy_array = np.array(self.test_metrics['arrived_accuracy'])
-        mean_angle_array = np.array(self.test_metrics['mean_angle'])
-        l1_loss_save_path = os.path.join(self.result_dir, 'test_l1_loss.npy')
-        accuracy_save_path = os.path.join(self.result_dir, 'test_arrived_accuracy.npy')
-        mean_angle_save_path = os.path.join(self.result_dir, 'test_mean_angle.npy')
-        np.save(l1_loss_save_path, l1_loss_array)
-        np.save(accuracy_save_path, accuracy_array)
-        np.save(mean_angle_save_path, mean_angle_array)
-        print("*** Test Metrics ***")
-        print(f"Test mean L1 loss {l1_loss_array.mean():.4f} saved to {l1_loss_save_path}")
-        print(f"Test mean arrived accuracy {accuracy_array.mean():.4f} saved to {accuracy_save_path}")
-        print(f"Test mean angle {mean_angle_array.mean():.2f} degrees saved to {mean_angle_save_path}")
+        # l1_loss_array = np.array(self.test_metrics['l1_loss'])
+        # accuracy_array = np.array(self.test_metrics['arrived_accuracy'])
+        # mean_angle_array = np.array(self.test_metrics['mean_angle'])
+        # l1_loss_save_path = os.path.join(self.result_dir, 'test_l1_loss.npy')
+        # accuracy_save_path = os.path.join(self.result_dir, 'test_arrived_accuracy.npy')
+        # mean_angle_save_path = os.path.join(self.result_dir, 'test_mean_angle.npy')
+        # np.save(l1_loss_save_path, l1_loss_array)
+        # np.save(accuracy_save_path, accuracy_array)
+        # np.save(mean_angle_save_path, mean_angle_array)
+        # print("*** Test Metrics ***")
+        # print(f"Test mean L1 loss {l1_loss_array.mean():.4f} saved to {l1_loss_save_path}")
+        # print(f"Test mean arrived accuracy {accuracy_array.mean():.4f} saved to {accuracy_save_path}")
+        # print(f"Test mean angle {mean_angle_array.mean():.2f} degrees saved to {mean_angle_save_path}")
+        for metric in self.test_metrics:
+            metric_array = np.array(self.test_metrics[metric])
+            save_path = os.path.join(self.result_dir, f'test_{metric}.npy')
+            np.save(save_path, metric_array)
+            print(f"Test mean {metric} {metric_array.mean():.4f} saved to {save_path}")
 
     def on_validation_epoch_start(self):
         self.vis_count = 0
 
     def on_test_epoch_start(self):
         self.vis_count = 0
+        if self.output_coordinate_repr == "euclidean":
+            self.test_metrics = {'l1_loss': [], 'arrived_accuracy': [], 'mean_angle': []}
+        elif self.output_coordinate_repr == "polar":
+            self.test_metrics = {'distance_loss': [], 'angle_loss': [], 'arrived_accuracy': [], 'mean_angle': []}
 
     def compute_loss(self, wp_pred, arrive_pred, batch):
         waypoints_target = batch['waypoints']
@@ -179,9 +237,41 @@ class UrbanNavModule(pl.LightningModule):
             # direction_loss = direction_loss / wp_scale
 
         return {'waypoints_loss': wp_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss}
+    
+    def compute_loss_polar(self, wp_pred_euclidean, distance_pred, angle_pred, arrive_pred, batch):
+        waypoints_target = batch['waypoints']
+        arrived_target = batch['arrived']
+        
+        # Compute distance and angle targets
+        distance_target, angle_target = self.waypoints_to_polar(waypoints_target)
+        
+        # Compute L1 loss for distance and angle
+        distance_loss = F.l1_loss(distance_pred, distance_target)
+        angle_loss = F.l1_loss(angle_pred, angle_target)
+        
+        # Compute arrived loss
+        arrived_loss = F.binary_cross_entropy_with_logits(arrive_pred.flatten(), arrived_target)
+        
+        # Compute direction loss using Euclidean waypoints
+        wp_pred_last = wp_pred_euclidean[:, -1, :]  # shape [batch_size, 2]
+        wp_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
+
+        # Compute cosine similarity
+        dot_product = (wp_pred_last * wp_target_last).sum(dim=1)  # shape [batch_size]
+        norm_pred = wp_pred_last.norm(dim=1)  # shape [batch_size]
+        norm_target = wp_target_last.norm(dim=1)  # shape [batch_size]
+        cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
+
+        # Loss is 1 - cos_sim
+        direction_loss = 1 - cos_sim.mean()
+
+        if self.do_normalize:
+            distance_loss = distance_loss / distance_target.mean()
+
+        return {'distance_loss': distance_loss, 'angle_loss': angle_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss}
 
     def configure_optimizers(self):
-        optimizer_name = self.cfg.optimizer.name
+        optimizer_name = self.cfg.optimizer.name.lower()
         lr = float(self.cfg.optimizer.lr)
 
         if optimizer_name == 'adam':
@@ -195,13 +285,13 @@ class UrbanNavModule(pl.LightningModule):
 
         # Scheduler
         scheduler_cfg = self.cfg.scheduler
-        if scheduler_cfg.name == 'step_lr':
+        if scheduler_cfg.name.lower() == 'step_lr':
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_cfg.step_size, gamma=scheduler_cfg.gamma)
             return [optimizer], [scheduler]
-        elif scheduler_cfg.name == 'cosine':
+        elif scheduler_cfg.name.lower() == 'cosine':
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cfg.training.max_epochs)
             return [optimizer], [scheduler]
-        elif scheduler_cfg.name == 'none':
+        elif scheduler_cfg.name.lower() == 'none':
             return optimizer
         else:
             raise ValueError(f"Unknown scheduler: {scheduler_cfg.name}")
@@ -291,3 +381,10 @@ class UrbanNavModule(pl.LightningModule):
             plt.close(fig)
 
             self.vis_count += 1
+
+    def waypoints_to_polar(self, waypoints):
+        # Compute relative differences
+        deltas = torch.diff(waypoints, dim=1, prepend=torch.zeros_like(waypoints[:, :1, :]))
+        distance = torch.norm(deltas, dim=2)
+        angle = torch.atan2(deltas[:, :, 1], deltas[:, :, 0]) * 180 / torch.pi
+        return distance, angle

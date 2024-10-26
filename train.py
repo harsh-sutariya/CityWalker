@@ -109,7 +109,7 @@ def main():
         dirpath=os.path.join(result_dir, 'checkpoints'),
         save_last=True,
         save_top_k=1,
-        monitor='val/l1_loss',
+        monitor='val/direction_loss',
     )
 
     num_gpu = torch.cuda.device_count()

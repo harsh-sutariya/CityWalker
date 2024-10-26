@@ -10,7 +10,9 @@ training:
   amp: true
   normalize_step_length: true
   resume: false
-  direction_loss_weight: 1.0
+  direction_loss_weight: 5.0
+  distance_loss_weight: 1.0
+  angle_loss_weight: 1.0
 
 scheduler:
   name: 'cosine'
@@ -30,7 +32,7 @@ model:
   output_coordinate_repr: 'polar'
 
   cord_embedding:
-    type: 'polar'
+    type: 'target'
     num_freqs: 6
     include_input: true
 

@@ -133,6 +133,7 @@ class UrbanNav(nn.Module):
         if self.output_coordinate_repr == 'euclidean':
             # Predict deltas and compute cumulative sum
             wp_pred = torch.cumsum(wp_pred, dim=1)
+            return wp_pred, arrive_pred
         elif self.output_coordinate_repr == 'polar':
             # Convert polar deltas to Cartesian deltas and compute cumulative sum
             distances = wp_pred[:, :, 0]
@@ -141,7 +142,6 @@ class UrbanNav(nn.Module):
             dy = distances * torch.sin(angles)
             deltas = torch.stack([dx, dy], dim=-1)
             wp_pred = torch.cumsum(deltas, dim=1)
+            return wp_pred, arrive_pred, distances, angles
         else:
             raise NotImplementedError(f"Output coordinate representation {self.output_coordinate_repr} not implemented")
-
-        return wp_pred, arrive_pred
