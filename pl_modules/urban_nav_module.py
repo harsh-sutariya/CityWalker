@@ -214,7 +214,7 @@ class UrbanNavModule(pl.LightningModule):
     def compute_loss(self, wp_pred, arrive_pred, batch):
         waypoints_target = batch['waypoints']
         arrived_target = batch['arrived']
-        wp_loss = F.l1_loss(wp_pred, waypoints_target)
+        wp_loss = F.mse_loss(wp_pred, waypoints_target)
         arrived_loss = F.binary_cross_entropy_with_logits(arrive_pred.flatten(), arrived_target)
 
         # Compute direction loss
@@ -228,7 +228,7 @@ class UrbanNavModule(pl.LightningModule):
         cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
 
         # Loss is 1 - cos_sim
-        direction_loss = 1 - cos_sim.mean()
+        direction_loss = (1 - cos_sim.mean()) ** 2
 
         if self.do_normalize:
             wp_scale = waypoints_target[:, 0, :].norm(p=2, dim=1).mean()
@@ -263,7 +263,7 @@ class UrbanNavModule(pl.LightningModule):
         cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
 
         # Loss is 1 - cos_sim
-        direction_loss = 1 - cos_sim.mean()
+        direction_loss = (1 - cos_sim.mean()) ** 2
 
         if self.do_normalize:
             distance_loss = distance_loss / distance_target.mean()
