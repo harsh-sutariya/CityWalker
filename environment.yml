@@ -2,6 +2,7 @@ name: UrbanNav
 channels:
   - nvidia
   - pytorch
+  - xformers
   - defaults
 dependencies:
   - python
@@ -9,6 +10,7 @@ dependencies:
   - pytorch
   - torchvision
   - pytorch-cuda=12.1
+  - xformers
   - pip:
       - PyYAML
       - numpy

@@ -20,6 +20,10 @@ class UrbanNav(nn.Module):
         self.do_resize = cfg.model.do_resize
         self.output_coordinate_repr = cfg.model.output_coordinate_repr  # 'polar' or 'euclidean'
 
+        if self.obs_encoder_type.startswith("dinov2"):
+            self.image_height = cfg.model.obs_encoder.image_height
+            self.image_width = cfg.model.obs_encoder.image_width
+
         if self.do_rgb_normalize:
             self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
             self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
@@ -39,6 +43,15 @@ class UrbanNav(nn.Module):
             self.obs_encoder = model_constructor()
             self.num_obs_features = self.obs_encoder.hidden_dim
             self.obs_encoder.heads = nn.Identity()  # Remove classification head
+        elif self.obs_encoder_type.startswith("dinov2"):
+            self.obs_encoder = torch.hub.load('facebookresearch/dinov2', self.obs_encoder_type)
+            feature_dim = {
+                "dinov2_vits14": 384,
+                "dinov2_vitb14": 768,
+                "dinov2_vitl14": 1024,
+                "dinov2_vitg14": 1536,
+            }
+            self.num_obs_features = feature_dim[self.obs_encoder_type]
         else:
             raise NotImplementedError(f"Observation encoder type {self.obs_encoder_type} not implemented")
 
@@ -91,6 +104,8 @@ class UrbanNav(nn.Module):
         if self.do_resize:
             if self.obs_encoder_type.startswith("vit"):
                 obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
+            elif self.obs_encoder_type.startswith("dinov2"):
+                obs = F.interpolate(obs, size=(self.image_height, self.image_width), mode='bilinear', align_corners=False)
             else:
                 obs = F.interpolate(obs, size=(400, 400), mode='bilinear', align_corners=False)
 
@@ -112,6 +127,8 @@ class UrbanNav(nn.Module):
             obs_enc = torch.flatten(x, 1)
         elif self.obs_encoder_type.startswith("vit"):
             obs_enc = self.obs_encoder(obs)  # Returns class token embedding
+        elif self.obs_encoder_type.startswith("dinov2"):
+            obs_enc = self.obs_encoder(obs)
         else:
             raise NotImplementedError(f"Observation encoder type {self.obs_encoder_type} not implemented")
 

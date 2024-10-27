@@ -4,7 +4,7 @@ project:
   result_dir: 'results'
 
 training:
-  batch_size: 8
+  batch_size: 6
   max_epochs: 10
   gpus: 1
   amp: true
@@ -27,9 +27,11 @@ model:
   do_rgb_normalize: true
   do_resize: true
   obs_encoder:
-    type: 'vit_l_16'
+    type: 'dinov2_vitb14'
     context_size: 5
-  output_coordinate_repr: 'polar'
+    image_height: 476
+    image_width: 630
+  output_coordinate_repr: 'euclidean'
 
   cord_embedding:
     type: 'target'
