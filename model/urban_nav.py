@@ -21,8 +21,8 @@ class UrbanNav(nn.Module):
         self.output_coordinate_repr = cfg.model.output_coordinate_repr  # 'polar' or 'euclidean'
 
         if self.obs_encoder_type.startswith("dinov2"):
-            self.image_height = cfg.model.obs_encoder.image_height
-            self.image_width = cfg.model.obs_encoder.image_width
+            self.crop = cfg.model.obs_encoder.crop
+            self.resize = cfg.model.obs_encoder.resize
 
         if self.do_rgb_normalize:
             self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
@@ -105,7 +105,9 @@ class UrbanNav(nn.Module):
             if self.obs_encoder_type.startswith("vit"):
                 obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
             elif self.obs_encoder_type.startswith("dinov2"):
-                obs = F.interpolate(obs, size=(self.image_height, self.image_width), mode='bilinear', align_corners=False)
+                # obs = F.interpolate(obs, size=(self.image_height, self.image_width), mode='bilinear', align_corners=False)
+                obs = TF.center_crop(obs, self.crop)
+                obs = TF.resize(obs, self.resize)
             else:
                 obs = F.interpolate(obs, size=(400, 400), mode='bilinear', align_corners=False)
 
