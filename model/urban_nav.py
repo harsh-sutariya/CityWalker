@@ -4,8 +4,10 @@ import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import torchvision.transforms as transforms
 from efficientnet_pytorch import EfficientNet
-from model.model_utils import PolarEmbedding, MultiLayerDecoder
+from model.model_utils import PolarEmbedding, MultiLayerDecoder, PositionalEncoding
 from torchvision import models
+from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 class UrbanNav(nn.Module):
     def __init__(self, cfg):
@@ -51,6 +53,9 @@ class UrbanNav(nn.Module):
                 "dinov2_vitl14": 1024,
                 "dinov2_vitg14": 1536,
             }
+            if cfg.model.obs_encoder.freeze:
+                for param in self.obs_encoder.parameters():
+                    param.requires_grad = False
             self.num_obs_features = feature_dim[self.obs_encoder_type]
         else:
             raise NotImplementedError(f"Observation encoder type {self.obs_encoder_type} not implemented")
@@ -88,10 +93,40 @@ class UrbanNav(nn.Module):
             )
             self.wp_predictor = nn.Linear(32, self.len_traj_pred * 2)
             self.arrive_predictor = nn.Linear(32, 1)
+        elif cfg.model.decoder.type == "diff_policy":
+            self.positional_encoding = PositionalEncoding(self.encoder_feat_dim, max_seq_len=self.context_size+1)
+            self.sa_layer = nn.TransformerEncoderLayer(
+                d_model=self.encoder_feat_dim, 
+                nhead=cfg.model.decoder.num_heads, 
+                dim_feedforward=cfg.model.decoder.ff_dim_factor*self.encoder_feat_dim, 
+                activation="gelu", 
+                batch_first=True, 
+                norm_first=True
+            )
+            self.sa_decoder = nn.TransformerEncoder(self.sa_layer, num_layers=cfg.model.decoder.num_layers)
+            self.wp_predictor = ConditionalUnet1D(
+                input_dim=2,
+                global_cond_dim=self.encoder_feat_dim,
+                down_dims=[64, 128, 256],
+                cond_predict_scale=False,
+            )
+            self.arrive_predictor = nn.Sequential(
+                nn.Linear(self.encoder_feat_dim, 256),
+                nn.ReLU(),
+                nn.Linear(256, 32),
+                nn.ReLU(),
+                nn.Linear(32, 1),
+            )
+            self.noise_scheduler = DDPMScheduler(
+                num_train_timesteps=cfg.model.decoder.num_diffusion_iters,
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
         else:
-            raise NotImplementedError(f"Decoder type {cfg.model.decoder.type} not implemented")
+            raise NotImplementedError(f"Decoder type {cfg.model.decoder.type} not implemented")  
 
-    def forward(self, obs, cord):
+    def forward(self, obs, cord, gt_action=None):
         """
         Args:
             obs: (B, N, 3, H, W) tensor
@@ -147,20 +182,57 @@ class UrbanNav(nn.Module):
             dec_out = self.decoder(tokens)
             wp_pred = self.wp_predictor(dec_out).view(B, self.len_traj_pred, 2)
             arrive_pred = self.arrive_predictor(dec_out).view(B, 1)
-
-        # Waypoint Prediction Processing
-        if self.output_coordinate_repr == 'euclidean':
-            # Predict deltas and compute cumulative sum
+            # Waypoint Prediction Processing
+            if self.output_coordinate_repr == 'euclidean':
+                # Predict deltas and compute cumulative sum
+                wp_pred = torch.cumsum(wp_pred, dim=1)
+                return wp_pred, arrive_pred
+            elif self.output_coordinate_repr == 'polar':
+                # Convert polar deltas to Cartesian deltas and compute cumulative sum
+                distances = wp_pred[:, :, 0]
+                angles = wp_pred[:, :, 1]
+                dx = distances * torch.cos(angles)
+                dy = distances * torch.sin(angles)
+                deltas = torch.stack([dx, dy], dim=-1)
+                wp_pred = torch.cumsum(deltas, dim=1)
+                return wp_pred, arrive_pred, distances, angles
+            else:
+                raise NotImplementedError(f"Output coordinate representation {self.output_coordinate_repr} not implemented")
+        elif self.decoder_type == "diff_policy":
+            tokens = self.positional_encoding(tokens)
+            dec_out = self.sa_decoder(tokens).mean(dim=1)
+            
+            deltas = torch.diff(gt_action, dim=1, prepend=torch.zeros_like(gt_action[:, :1, :]))
+            if self.output_coordinate_repr == 'polar':
+                distances = torch.norm(deltas, dim=-1)
+                angles = torch.atan2(deltas[:, :, 1], deltas[:, :, 0])
+                deltas = torch.stack([distances, angles], dim=-1)
+            elif self.output_coordinate_repr == 'euclidean':
+                pass
+            else:
+                raise NotImplementedError(f"Output coordinate representation {self.output_coordinate_repr} not implemented")
+            noise = torch.randn_like(deltas)
+            timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (B,), device=noise.device).long()
+            noisy_action = self.noise_scheduler.add_noise(deltas, noise, timesteps)
+            
+            # Pad noisy_action with zeros to make the second dimension 12
+            # Refer to https://github.com/real-stanford/diffusion_policy/issues/32#issuecomment-1834622174
+            padding_size = 12 - noisy_action.size(1)
+            if padding_size > 0:
+                noisy_action_pad = F.pad(noisy_action, (0, 0, 0, padding_size))
+            
+            noise_pred = self.wp_predictor(sample=noisy_action_pad, timestep=timesteps, global_cond=dec_out)
+            noise_pred = noise_pred[:, :self.len_traj_pred]
+            alpha_cumprod = self.noise_scheduler.alphas_cumprod[timesteps].view(B, 1, 1)
+            wp_pred = (noisy_action - noise_pred * (1 - alpha_cumprod).sqrt()) / alpha_cumprod.sqrt()
+            if self.output_coordinate_repr == 'polar':
+                distances = wp_pred[:, :, 0]
+                angles = wp_pred[:, :, 1]
+                dx = distances * torch.cos(angles)
+                dy = distances * torch.sin(angles)
+                wp_pred = torch.stack([dx, dy], dim=-1)
             wp_pred = torch.cumsum(wp_pred, dim=1)
-            return wp_pred, arrive_pred
-        elif self.output_coordinate_repr == 'polar':
-            # Convert polar deltas to Cartesian deltas and compute cumulative sum
-            distances = wp_pred[:, :, 0]
-            angles = wp_pred[:, :, 1]
-            dx = distances * torch.cos(angles)
-            dy = distances * torch.sin(angles)
-            deltas = torch.stack([dx, dy], dim=-1)
-            wp_pred = torch.cumsum(deltas, dim=1)
-            return wp_pred, arrive_pred, distances, angles
-        else:
-            raise NotImplementedError(f"Output coordinate representation {self.output_coordinate_repr} not implemented")
+            
+            arrived_pres = self.arrive_predictor(dec_out).view(B, 1)
+            
+            return wp_pred, noise_pred, arrived_pres, noise

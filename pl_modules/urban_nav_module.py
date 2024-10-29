@@ -21,6 +21,10 @@ class UrbanNavModule(pl.LightningModule):
         if self.output_coordinate_repr not in ["euclidean", "polar"]:
             raise ValueError(f"Unsupported coordinate representation: {self.output_coordinate_repr}")
         
+        self.decoder = cfg.model.decoder.type
+        if self.decoder not in ["diff_policy", "transformer"]:
+            raise ValueError(f"Unsupported decoder: {self.decoder}")
+        
         # Direction loss weight (you can adjust this value in your cfg)
         self.direction_loss_weight = cfg.training.direction_loss_weight
         
@@ -39,34 +43,43 @@ class UrbanNavModule(pl.LightningModule):
             self.distance_loss_weight = cfg.training.distance_loss_weight
             self.angle_loss_weight = cfg.training.angle_loss_weight
 
-    def forward(self, obs, cord):
-        return self.model(obs, cord)
+    def forward(self, obs, cord, gt_action=None):
+        return self.model(obs, cord, gt_action)
     
     def training_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
         
-        if self.output_coordinate_repr == "euclidean":
-            wp_pred, arrive_pred = self(obs, cord)
-            losses = self.compute_loss(wp_pred, arrive_pred, batch)
-            waypoints_loss = losses['waypoints_loss']
+        if self.decoder == "attention":
+            if self.output_coordinate_repr == "euclidean":
+                wp_pred, arrive_pred = self(obs, cord)
+                losses = self.compute_loss(wp_pred, arrive_pred, batch)
+                waypoints_loss = losses['waypoints_loss']
+                arrived_loss = losses['arrived_loss']
+                direction_loss = losses['direction_loss']
+                total_loss = waypoints_loss + arrived_loss + self.direction_loss_weight * direction_loss
+                self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+            elif self.output_coordinate_repr == "polar":
+                wp_pred_euclidean, arrive_pred, distance_pred, angle_pred = self(obs, cord)
+                losses = self.compute_loss_polar(wp_pred_euclidean, distance_pred, angle_pred, arrive_pred, batch)
+                distance_loss = losses['distance_loss']
+                angle_loss = losses['angle_loss']
+                arrived_loss = losses['arrived_loss']
+                direction_loss = losses['direction_loss']
+                total_loss = (self.distance_loss_weight * distance_loss +
+                            self.angle_loss_weight * angle_loss +
+                            arrived_loss +
+                            self.direction_loss_weight * direction_loss)
+                self.log('train/l_distance', distance_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+                self.log('train/l_angle', angle_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        elif self.decoder == "diff_policy":
+            wp_pred, noise_pred, arrived_pred, noise = self(obs, cord, batch['waypoints'])
+            losses = self.compute_loss_diff_policy(wp_pred, noise_pred, arrived_pred, noise, batch)
+            noise_loss = losses['noise_loss']
             arrived_loss = losses['arrived_loss']
             direction_loss = losses['direction_loss']
-            total_loss = waypoints_loss + arrived_loss + self.direction_loss_weight * direction_loss
-            self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
-        elif self.output_coordinate_repr == "polar":
-            wp_pred_euclidean, arrive_pred, distance_pred, angle_pred = self(obs, cord)
-            losses = self.compute_loss_polar(wp_pred_euclidean, distance_pred, angle_pred, arrive_pred, batch)
-            distance_loss = losses['distance_loss']
-            angle_loss = losses['angle_loss']
-            arrived_loss = losses['arrived_loss']
-            direction_loss = losses['direction_loss']
-            total_loss = (self.distance_loss_weight * distance_loss +
-                          self.angle_loss_weight * angle_loss +
-                          arrived_loss +
-                          self.direction_loss_weight * direction_loss)
-            self.log('train/l_distance', distance_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
-            self.log('train/l_angle', angle_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+            total_loss = noise_loss + arrived_loss + self.direction_loss_weight * direction_loss
+            self.log('train/l_noise', noise_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         
         # Common logs
         self.log('train/l_arvd', arrived_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
@@ -77,20 +90,26 @@ class UrbanNavModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        
-        if self.output_coordinate_repr == "euclidean":
-            wp_pred, arrive_pred = self(obs, cord)
-            losses = self.compute_loss(wp_pred, arrive_pred, batch)
-            l1_loss = losses['waypoints_loss']
+        if self.decoder == "attention":
+            if self.output_coordinate_repr == "euclidean":
+                wp_pred, arrive_pred = self(obs, cord)
+                losses = self.compute_loss(wp_pred, arrive_pred, batch)
+                l1_loss = losses['waypoints_loss']
+                direction_loss = losses['direction_loss']
+                self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                
+            elif self.output_coordinate_repr == "polar":
+                wp_pred, arrive_pred, distance_pred, angle_pred = self(obs, cord)
+                losses = self.compute_loss_polar(wp_pred, distance_pred, angle_pred, arrive_pred, batch)
+                direction_loss = losses['direction_loss']
+                self.log('val/distance_loss', losses['distance_loss'], on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+                self.log('val/angle_loss', losses['angle_loss'], on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        elif self.decoder == "diff_policy":
+            wp_pred, noise_pred, arrive_pred, noise = self(obs, cord, batch['waypoints'])
+            losses = self.compute_loss_diff_policy(wp_pred, noise_pred, arrive_pred, noise, batch)
+            noise_loss = losses['noise_loss']
             direction_loss = losses['direction_loss']
-            self.log('val/l1_loss', l1_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-            
-        elif self.output_coordinate_repr == "polar":
-            wp_pred, arrive_pred, distance_pred, angle_pred = self(obs, cord)
-            losses = self.compute_loss_polar(wp_pred, distance_pred, angle_pred, arrive_pred, batch)
-            direction_loss = losses['direction_loss']
-            self.log('val/distance_loss', losses['distance_loss'], on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-            self.log('val/angle_loss', losses['angle_loss'], on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log('val/noise_loss', noise_loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
         
         # Compute accuracy for "arrived" prediction
         arrived_target = batch['arrived']
@@ -214,7 +233,7 @@ class UrbanNavModule(pl.LightningModule):
     def compute_loss(self, wp_pred, arrive_pred, batch):
         waypoints_target = batch['waypoints']
         arrived_target = batch['arrived']
-        wp_loss = F.mse_loss(wp_pred, waypoints_target)
+        wp_loss = F.l1_loss(wp_pred, waypoints_target)
         arrived_loss = F.binary_cross_entropy_with_logits(arrive_pred.flatten(), arrived_target)
 
         # Compute direction loss
@@ -228,7 +247,7 @@ class UrbanNavModule(pl.LightningModule):
         cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
 
         # Loss is 1 - cos_sim
-        direction_loss = (1 - cos_sim.mean()) ** 2
+        direction_loss = 1 - cos_sim.mean()
 
         if self.do_normalize:
             wp_scale = waypoints_target[:, 0, :].norm(p=2, dim=1).mean()
@@ -270,6 +289,30 @@ class UrbanNavModule(pl.LightningModule):
 
         return {'distance_loss': distance_loss, 'angle_loss': angle_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss}
 
+    def compute_loss_diff_policy(self, wp_pred, noise_pred, arrived_pred, noise, batch):
+        # Compute loss for noise prediction
+        waypoints_target = batch['waypoints']
+        noise_loss = F.mse_loss(noise_pred, noise)
+        
+        # Compute loss for arrived prediction
+        arrived_target = batch['arrived']
+        arrived_loss = F.binary_cross_entropy_with_logits(arrived_pred.flatten(), arrived_target)
+
+        # Compute direction loss
+        wp_pred_last = wp_pred[:, -1, :]  # shape [batch_size, 2]
+        wp_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
+
+        # Compute cosine similarity
+        dot_product = (wp_pred_last * wp_target_last).sum(dim=1)  # shape [batch_size]
+        norm_pred = wp_pred_last.norm(dim=1)  # shape [batch_size]
+        norm_target = wp_target_last.norm(dim=1)  # shape [batch_size]
+        cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
+
+        # Loss is 1 - cos_sim
+        direction_loss = (1 - cos_sim.mean()) ** 2
+        
+        return {'noise_loss': noise_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss}
+    
     def configure_optimizers(self):
         optimizer_name = self.cfg.optimizer.name.lower()
         lr = float(self.cfg.optimizer.lr)
