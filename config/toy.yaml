@@ -10,7 +10,7 @@ training:
   amp: true
   normalize_step_length: true
   resume: false
-  direction_loss_weight: 5.0
+  direction_loss_weight: 3.0
   distance_loss_weight: 1.0
   angle_loss_weight: 1.0
 
@@ -21,7 +21,7 @@ scheduler:
 
 optimizer:
   name: 'adamw'
-  lr: 1e-5
+  lr: 1e-4
 
 model:
   do_rgb_normalize: true
@@ -35,14 +35,14 @@ model:
   output_coordinate_repr: 'euclidean'
 
   cord_embedding:
-    type: 'target'
+    type: 'input_target'
     num_freqs: 6
     include_input: true
 
   encoder_feat_dim: 768
 
   decoder:
-    type: 'diff_policy'
+    type: 'attention'
     len_traj_pred: 5
     num_heads: 4
     num_layers: 4

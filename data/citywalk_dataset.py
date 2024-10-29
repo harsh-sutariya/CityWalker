@@ -159,6 +159,11 @@ class CityWalkDataset(Dataset):
             transformed_input_positions = self.input2target(input_poses, target_pose)
         elif self.cfg.model.cord_embedding.type == 'target':
             transformed_input_positions = self.transform_target_pose(target_pose, current_pose)[np.newaxis, [0, 2]]
+        elif self.cfg.model.cord_embedding.type == 'input_target':
+            transformed_input_positions = np.concatenate([
+                self.input2target(input_poses, target_pose), 
+                self.transform_target_pose(target_pose, current_pose)[np.newaxis, [0, 2]]
+            ], axis=0)
         else:
             raise NotImplementedError(f"Coordinate embedding type {self.cfg.model.cord_embedding} not implemented")
         waypoints_transformed = self.transform_waypoints(waypoint_poses, current_pose)

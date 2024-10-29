@@ -67,6 +67,9 @@ class UrbanNav(nn.Module):
         elif self.cord_embedding_type == 'target':
             self.cord_embedding = PolarEmbedding(cfg)
             self.dim_cord_embedding = self.cord_embedding.out_dim
+        elif self.cord_embedding_type == 'input_target':
+            self.cord_embedding = PolarEmbedding(cfg)
+            self.dim_cord_embedding = self.cord_embedding.out_dim * (self.context_size + 1)
         else:
             raise NotImplementedError(f"Coordinate embedding type {self.cord_embedding_type} not implemented")
 

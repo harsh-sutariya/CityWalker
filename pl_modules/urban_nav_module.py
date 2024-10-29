@@ -22,7 +22,7 @@ class UrbanNavModule(pl.LightningModule):
             raise ValueError(f"Unsupported coordinate representation: {self.output_coordinate_repr}")
         
         self.decoder = cfg.model.decoder.type
-        if self.decoder not in ["diff_policy", "transformer"]:
+        if self.decoder not in ["diff_policy", "attention"]:
             raise ValueError(f"Unsupported decoder: {self.decoder}")
         
         # Direction loss weight (you can adjust this value in your cfg)
