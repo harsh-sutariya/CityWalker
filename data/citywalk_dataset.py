@@ -96,7 +96,8 @@ class CityWalkDataset(Dataset):
         idx_counter = 0
         for video_idx, count in enumerate(self.count):
             start_idx = idx_counter
-            for pose_start in range(0, count, self.context_size):
+            interval = self.context_size if self.mode == 'train' else 1
+            for pose_start in range(0, count, interval):
                 self.lut.append((video_idx, pose_start))
                 idx_counter += 1
             end_idx = idx_counter
