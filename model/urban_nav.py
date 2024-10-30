@@ -20,9 +20,9 @@ class UrbanNav(nn.Module):
         self.do_resize = cfg.model.do_resize
         self.output_coordinate_repr = cfg.model.output_coordinate_repr  # 'polar' or 'euclidean'
 
-        if self.obs_encoder_type.startswith("dinov2"):
-            self.crop = cfg.model.obs_encoder.crop
-            self.resize = cfg.model.obs_encoder.resize
+        # if self.obs_encoder_type.startswith("dinov2"):
+        self.crop = cfg.model.obs_encoder.crop
+        self.resize = cfg.model.obs_encoder.resize
 
         if self.do_rgb_normalize:
             self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
@@ -35,12 +35,12 @@ class UrbanNav(nn.Module):
             self.obs_encoder._fc = nn.Identity()  # Remove classification layer
         elif self.obs_encoder_type.startswith("resnet"):
             model_constructor = getattr(models, self.obs_encoder_type)
-            self.obs_encoder = model_constructor()
+            self.obs_encoder = model_constructor(weights="DEFAULT")
             self.num_obs_features = self.obs_encoder.fc.in_features
             self.obs_encoder.fc = nn.Identity()  # Remove classification layer
         elif self.obs_encoder_type.startswith("vit"):
             model_constructor = getattr(models, self.obs_encoder_type)
-            self.obs_encoder = model_constructor()
+            self.obs_encoder = model_constructor(weights="IMAGENET1K_SWAG_E2E_V1")
             self.num_obs_features = self.obs_encoder.hidden_dim
             self.obs_encoder.heads = nn.Identity()  # Remove classification head
         elif self.obs_encoder_type.startswith("dinov2"):
@@ -140,14 +140,8 @@ class UrbanNav(nn.Module):
         if self.do_rgb_normalize:
             obs = (obs - self.mean) / self.std
         if self.do_resize:
-            if self.obs_encoder_type.startswith("vit"):
-                obs = F.interpolate(obs, size=(224, 224), mode='bilinear', align_corners=False)
-            elif self.obs_encoder_type.startswith("dinov2"):
-                # obs = F.interpolate(obs, size=(self.image_height, self.image_width), mode='bilinear', align_corners=False)
-                obs = TF.center_crop(obs, self.crop)
-                obs = TF.resize(obs, self.resize)
-            else:
-                obs = F.interpolate(obs, size=(400, 400), mode='bilinear', align_corners=False)
+            obs = TF.center_crop(obs, self.crop)
+            obs = TF.resize(obs, self.resize)
 
         # Observation Encoding
         if self.obs_encoder_type.startswith("efficientnet"):
