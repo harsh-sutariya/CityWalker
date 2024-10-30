@@ -157,20 +157,24 @@ class UrbanNavModule(pl.LightningModule):
         correct = (arrived_pred_binary == arrived_target).float()
         accuracy = correct.sum().item() / correct.numel()
 
-        wp_pred_last = wp_pred[:, -1, :]  # shape [batch_size, 2]
-        waypoints_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
+        # wp_pred_last = wp_pred[:, -1, :]  # shape [batch_size, 2]
+        # waypoints_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
 
         # Compute cosine similarity
-        dot_product = (wp_pred_last * waypoints_target_last).sum(dim=1)  # shape [batch_size]
-        norm_pred = wp_pred_last.norm(dim=1)  # shape [batch_size]
-        norm_target = waypoints_target_last.norm(dim=1)  # shape [batch_size]
+        B, T, _ = wp_pred.shape
+        wp_pred_view = wp_pred.view(-1, 2)
+        waypoints_target_view = waypoints_target.view(-1, 2)
+        dot_product = (wp_pred_view * waypoints_target_view).sum(dim=1)  # shape [batch_size]
+        norm_pred = wp_pred_view.norm(dim=1)  # shape [batch_size]
+        norm_target = waypoints_target_view.norm(dim=1)  # shape [batch_size]
         cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
         
         # Compute angle in degrees
         angle = torch.acos(cos_sim.clamp(-1+1e-7, 1-1e-7)) * 180 / torch.pi  # shape [batch_size]
+        angle = angle.view(B, T)
         
         # Take mean angle
-        mean_angle = angle.mean().item()
+        mean_angle = angle.mean(dim=0).cpu().numpy()
         
         # Store the metrics
         if self.output_coordinate_repr == "euclidean":
@@ -200,25 +204,16 @@ class UrbanNavModule(pl.LightningModule):
             )
 
     def on_test_epoch_end(self):
-        # Save the test metrics to a .npy file
-        # l1_loss_array = np.array(self.test_metrics['l1_loss'])
-        # accuracy_array = np.array(self.test_metrics['arrived_accuracy'])
-        # mean_angle_array = np.array(self.test_metrics['mean_angle'])
-        # l1_loss_save_path = os.path.join(self.result_dir, 'test_l1_loss.npy')
-        # accuracy_save_path = os.path.join(self.result_dir, 'test_arrived_accuracy.npy')
-        # mean_angle_save_path = os.path.join(self.result_dir, 'test_mean_angle.npy')
-        # np.save(l1_loss_save_path, l1_loss_array)
-        # np.save(accuracy_save_path, accuracy_array)
-        # np.save(mean_angle_save_path, mean_angle_array)
-        # print("*** Test Metrics ***")
-        # print(f"Test mean L1 loss {l1_loss_array.mean():.4f} saved to {l1_loss_save_path}")
-        # print(f"Test mean arrived accuracy {accuracy_array.mean():.4f} saved to {accuracy_save_path}")
-        # print(f"Test mean angle {mean_angle_array.mean():.2f} degrees saved to {mean_angle_save_path}")
         for metric in self.test_metrics:
             metric_array = np.array(self.test_metrics[metric])
             save_path = os.path.join(self.result_dir, f'test_{metric}.npy')
             np.save(save_path, metric_array)
-            print(f"Test mean {metric} {metric_array.mean():.4f} saved to {save_path}")
+            if not metric == "mean_angle":
+                print(f"Test mean {metric} {metric_array.mean():.4f} saved to {save_path}")
+            else:
+                mean_angle = metric_array.mean(axis=0)
+                for i in range(len(mean_angle)):
+                    print(f"Test mean angle at step {i} {mean_angle[i]:.4f}")
 
     def on_validation_epoch_start(self):
         self.vis_count = 0
