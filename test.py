@@ -10,6 +10,7 @@ import torch
 import glob
 
 torch.set_float32_matmul_precision('medium')
+pl.seed_everything(42, workers=True)
 
 
 class DictNamespace(argparse.Namespace):
