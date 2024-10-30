@@ -6,8 +6,6 @@ import torchvision.transforms as transforms
 from efficientnet_pytorch import EfficientNet
 from model.model_utils import PolarEmbedding, MultiLayerDecoder, PositionalEncoding
 from torchvision import models
-from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 class UrbanNav(nn.Module):
     def __init__(self, cfg):
@@ -97,6 +95,8 @@ class UrbanNav(nn.Module):
             self.wp_predictor = nn.Linear(32, self.len_traj_pred * 2)
             self.arrive_predictor = nn.Linear(32, 1)
         elif cfg.model.decoder.type == "diff_policy":
+            from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
+            from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
             self.positional_encoding = PositionalEncoding(self.encoder_feat_dim, max_seq_len=self.context_size+1)
             self.sa_layer = nn.TransformerEncoderLayer(
                 d_model=self.encoder_feat_dim, 
