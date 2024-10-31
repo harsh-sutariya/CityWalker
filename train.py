@@ -11,6 +11,7 @@ from pytorch_lightning.strategies import DDPStrategy
 import torch
 import glob
 torch.set_float32_matmul_precision('medium')
+pl.seed_everything(42, workers=True)
 
 
 # Remove the WandbLogger import from the top
