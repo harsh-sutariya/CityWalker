@@ -158,11 +158,9 @@ class CityWalkDataset(Dataset):
         current_pose = input_poses[-1]
         if self.cfg.model.cord_embedding.type == 'polar':
             transformed_input_positions = self.input2target(input_poses, target_pose)
-        elif self.cfg.model.cord_embedding.type == 'target':
-            transformed_input_positions = self.transform_target_pose(target_pose, current_pose)[np.newaxis, [0, 2]]
         elif self.cfg.model.cord_embedding.type == 'input_target':
             transformed_input_positions = np.concatenate([
-                self.input2target(input_poses, target_pose), 
+                self.transform_poses(input_poses, current_pose)[:, [0, 2]], 
                 self.transform_target_pose(target_pose, current_pose)[np.newaxis, [0, 2]]
             ], axis=0)
         else:
@@ -173,8 +171,6 @@ class CityWalkDataset(Dataset):
         input_positions = torch.tensor(transformed_input_positions, dtype=torch.float32)
         waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
         arrived = torch.tensor(arrived, dtype=torch.float32)
-        # print(input_positions)
-        # print(arrived)
         sample = {
             'video_frames': frames,
             'input_positions': input_positions,
