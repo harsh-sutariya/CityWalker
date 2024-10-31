@@ -30,11 +30,16 @@ class UrbanNavDataset(Dataset):
         #     if f.startswith('match_gps_pose') and f.endswith('.txt')
         # ]
         pose_files = [
-            "match_gps_pose6.txt",
-            "match_gps_pose7.txt",
-            "match_gps_pose8.txt",
-            "match_gps_pose9.txt",
-            "match_gps_pose11.txt",
+            "match_gps_ros_pose1.txt",
+            "match_gps_ros_pose6.txt",
+            "match_gps_ros_pose7.txt",
+            "match_gps_ros_pose8.txt",
+            "match_gps_ros_pose9.txt",
+            "match_gps_ros_pose11.txt",
+            "match_gps_ros_pose16.txt",
+            "match_gps_ros_pose17.txt",
+            "match_gps_ros_pose18.txt",
+            "match_gps_ros_pose21.txt",
         ]
         self.pose_path = [os.path.join(self.pose_dir, f) for f in pose_files]
 
@@ -43,7 +48,7 @@ class UrbanNavDataset(Dataset):
         elif mode == 'val':
             self.pose_path = self.pose_path[cfg.data.num_train: cfg.data.num_train + cfg.data.num_val]
         elif mode == 'test':
-            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test]
+            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test:]
         else:
             raise ValueError(f"Invalid mode {mode}")
 
@@ -56,7 +61,7 @@ class UrbanNavDataset(Dataset):
 
         for f in tqdm(self.pose_path, desc="Loading data"):
             seq_idx = ''.join(filter(str.isdigit, os.path.basename(f)))
-            image_folder = os.path.join(self.image_root_dir, f'dog_nav_{seq_idx}')
+            image_folder = os.path.join(self.image_root_dir, f'dog_nav_undistort_{seq_idx}')
             if not os.path.exists(image_folder):
                 raise FileNotFoundError(f"Image folder {image_folder} does not exist.")
             self.image_folders.append(image_folder)
@@ -77,25 +82,10 @@ class UrbanNavDataset(Dataset):
 
                 # Parse GPS data
                 gps_tokens = gps_line.split(',')
-                if len(gps_tokens) < 8:
-                    continue
-                # timestamp = float(gps_tokens[0])
                 latitude = float(gps_tokens[1])
                 longitude = float(gps_tokens[2])
                 # accuracy = float(gps_tokens[3])
                 altitude = float(gps_tokens[4])
-                # altitudeAccuracy = float(gps_tokens[5])
-                # heading = gps_tokens[6]
-                # speed = gps_tokens[7]
-
-                # if heading == '':
-                #     heading = None
-                # else:
-                #     heading = float(heading)
-                # if speed == '':
-                #     speed = None
-                # else:
-                #     speed = float(speed)
 
                 if ref_lat is None:
                     ref_lat = latitude
@@ -110,17 +100,14 @@ class UrbanNavDataset(Dataset):
 
                 # Parse pose data
                 pose_tokens = pose_line.split(',')
-                if len(pose_tokens) < 11:
-                    continue
-                qw = float(pose_tokens[2])
-                qx = float(pose_tokens[3])
-                qy = float(pose_tokens[4])
-                qz = float(pose_tokens[5])
-                tx = float(pose_tokens[6])
-                ty = float(pose_tokens[7])
-                tz = float(pose_tokens[8])
-                image_name = pose_tokens[10]
-                pose = [tx, ty, tz, qx, qy, qz, qw]
+                tx = float(pose_tokens[1])
+                ty = float(pose_tokens[2])
+                tz = float(pose_tokens[3])
+                rx = float(pose_tokens[4])
+                ry = float(pose_tokens[5])
+                rz = float(pose_tokens[6])
+                image_name = f"forward_{int(pose_tokens[7]):04d}.jpg"
+                pose = [tx, ty, tz, rx, ry, rz]
                 poses.append(pose)
                 images.append(image_name)
 
@@ -128,7 +115,8 @@ class UrbanNavDataset(Dataset):
             poses = np.array(poses)
             if poses.shape[0] == 0 or gps_positions.shape[0] == 0:
                 continue
-            usable = poses.shape[0] - self.context_size - max(self.search_window, self.wp_length)
+            usable = poses.shape[0] - self.context_size - max(self.arrived_threshold*2, self.wp_length)
+            print(f"Sequence {seq_idx}: {usable} usable samples.")
             self.count.append(max(usable, 0))
             self.gps_positions.append(gps_positions)
             self.poses.append(poses)
@@ -146,7 +134,8 @@ class UrbanNavDataset(Dataset):
         idx_counter = 0
         for seq_idx, count in enumerate(self.count):
             start_idx = idx_counter
-            for pose_start in range(count):
+            interval = self.context_size if self.mode == 'train' else 1
+            for pose_start in range(0, count, interval):
                 self.lut.append((seq_idx, pose_start))
                 idx_counter += 1
             end_idx = idx_counter
@@ -174,14 +163,18 @@ class UrbanNavDataset(Dataset):
         target_gps_position = future_gps_positions[target_idx]
 
         # Transform input GPS positions by subtracting target GPS position
-        input_positions = self.input2target(input_gps_positions, target_gps_position)[:, [0, 1]]
-
-        # Apply random rotation if in training mode
-        if self.mode == 'train':
-            rand_angle = np.random.uniform(-np.pi, np.pi)
-            rot_matrix = np.array([[np.cos(rand_angle), -np.sin(rand_angle)],
-                                   [np.sin(rand_angle), np.cos(rand_angle)]])
-            input_positions = input_positions @ rot_matrix.T
+        if self.cfg.model.cord_embedding.type == 'polar':
+            input_positions = self.input2target(input_gps_positions, target_gps_position)
+            # Apply random rotation if in training mode
+            if self.mode == 'train':
+                rand_angle = np.random.uniform(-np.pi, np.pi)
+                rot_matrix = np.array([[np.cos(rand_angle), -np.sin(rand_angle)],
+                                    [np.sin(rand_angle), np.cos(rand_angle)]])
+                input_positions = input_positions @ rot_matrix.T
+        elif self.cfg.model.cord_embedding.type == 'input_target':
+            input_positions = self.transform_input_target(input_gps_positions, target_gps_position)
+        else:
+            raise NotImplementedError(f"Coordinate embedding type {self.cfg.model.cord_embedding} not implemented")
 
         input_positions = torch.tensor(input_positions, dtype=torch.float32)
         arrived = torch.tensor(arrived, dtype=torch.float32)
@@ -216,26 +209,55 @@ class UrbanNavDataset(Dataset):
             'waypoints': waypoints_transformed,
             'arrived': arrived
         }
-        print("input", input_positions)
-        print("history", history_positions)
-        print("wp", waypoints_transformed)
-        print("target", target_transformed)
+        # print("input", input_positions)
+        # print("history", history_positions)
+        # print("wp", waypoints_transformed)
+        # print("target", target_transformed)
 
         if self.mode in ['val', 'test']:
             # For visualization
             history_positions = torch.tensor(history_positions[:, [0, 1]], dtype=torch.float32)
-            target_transformed_position = torch.tensor(target_transformed[[0, 1]], dtype=torch.float32)
-
-            sample['original_input_positions'] = history_positions
-            sample['noisy_input_positions'] = history_positions
-            sample['gt_waypoints'] = waypoints_transformed
-            sample['target_transformed'] = target_transformed_position
+            if self.cfg.model.cord_embedding.type == 'polar':
+                target_transformed_position = torch.tensor(target_transformed[[0, 1]], dtype=torch.float32)
+                sample['original_input_positions'] = history_positions
+                sample['noisy_input_positions'] = history_positions
+                sample['gt_waypoints'] = waypoints_transformed
+                sample['target_transformed'] = target_transformed_position
+            elif self.cfg.model.cord_embedding.type == 'input_target':
+                sample['original_input_positions'] = history_positions
+                sample['noisy_input_positions'] = input_positions[:-1, :]
+                sample['gt_waypoints'] = waypoints_transformed
+                sample['target_transformed'] = input_positions[-1, :]
 
         return sample
 
     def input2target(self, input_positions, target_position):
         transformed_input_positions = input_positions - target_position
         return transformed_input_positions
+    
+    def transform_input_target(self, input_positions, target_position):
+        # Translate positions to current position
+        current_position = input_positions[-1]
+        translated_input = input_positions - current_position
+        translated_target = target_position - current_position
+
+        # Calculate angle to rotate second last input to negative y-axis
+        second_last = translated_input[-2]
+        angle = -np.pi / 2 - np.arctan2(second_last[1], second_last[0])
+
+        # Create rotation matrix
+        rotation_matrix = np.array([
+            [np.cos(angle), -np.sin(angle)],
+            [np.sin(angle),  np.cos(angle)]
+        ])
+
+        # Apply rotation to input and target positions
+        rotated_input = np.dot(translated_input[:, :2], rotation_matrix.T)
+        rotated_target = np.dot(translated_target[:2], rotation_matrix.T)
+
+        composed_input = np.concatenate([rotated_input, rotated_target[np.newaxis, :]], axis=0)
+
+        return composed_input
 
     def select_target_index(self, future_positions):
         arrived = np.random.rand() < self.arrived_prob
@@ -252,6 +274,9 @@ class UrbanNavDataset(Dataset):
         pose_matrices = self.poses_to_matrices(poses)
         transformed_matrices = np.matmul(current_pose_inv[np.newaxis, :, :], pose_matrices)
         positions = transformed_matrices[:, :3, 3]
+        # Handel lidar extrinsic
+        positions[:, [0, 1]] = positions[:, [1, 0]]
+        positions[:, 1] *= -1
         return positions
 
     def transform_pose(self, pose, current_pose_array):
@@ -263,8 +288,8 @@ class UrbanNavDataset(Dataset):
         return position
 
     def pose_to_matrix(self, pose):
-        tx, ty, tz, qx, qy, qz, qw = pose
-        rotation = R.from_quat([qx, qy, qz, qw])
+        tx, ty, tz, rx, ry, rz = pose
+        rotation = R.from_rotvec([rx, ry, rz])
         matrix = np.eye(4)
         matrix[:3, :3] = rotation.as_matrix()
         matrix[:3, 3] = [tx, ty, tz]
@@ -274,11 +299,10 @@ class UrbanNavDataset(Dataset):
         tx = poses[:, 0]
         ty = poses[:, 1]
         tz = poses[:, 2]
-        qx = poses[:, 3]
-        qy = poses[:, 4]
-        qz = poses[:, 5]
-        qw = poses[:, 6]
-        rotations = R.from_quat(np.stack([qx, qy, qz, qw], axis=1))
+        rx = poses[:, 3]
+        ry = poses[:, 4]
+        rz = poses[:, 5]
+        rotations = R.from_rotvec(np.stack([rx, ry, rz], axis=1))
         matrices = np.tile(np.eye(4), (poses.shape[0], 1, 1))
         matrices[:, :3, :3] = rotations.as_matrix()
         matrices[:, :3, 3] = np.stack([tx, ty, tz], axis=1)
