@@ -154,27 +154,27 @@ class UrbanNavDataset(Dataset):
 
         # Get input GPS positions
         input_gps_positions = gps_positions[pose_start: pose_start + self.context_size]
-        future_gps_positions = gps_positions[pose_start + self.context_size: pose_start + self.context_size + self.search_window]
-        if future_gps_positions.shape[0] == 0:
-            raise IndexError(f"No future positions available for index {pose_start}.")
+        future_waypoints = poses[pose_start + self.context_size: pose_start + self.context_size + self.search_window]
+        if future_waypoints.shape[0] == 0:
+            raise IndexError(f"No future waypoints available for index {pose_start}.")
 
-        # Select target GPS position
-        target_idx, arrived = self.select_target_index(future_gps_positions)
-        target_gps_position = future_gps_positions[target_idx]
+        # Select target waypoint
+        target_idx, arrived = self.select_target_index(future_waypoints)
+        target_waypoint = future_waypoints[target_idx]
 
-        # Transform input GPS positions by subtracting target GPS position
+        # Transform input GPS positions by subtracting target waypoint position
         if self.cfg.model.cord_embedding.type == 'polar':
-            input_positions = self.input2target(input_gps_positions, target_gps_position)
+            input_positions = self.input2target(input_gps_positions, target_waypoint[:3])
             # Apply random rotation if in training mode
             if self.mode == 'train':
                 rand_angle = np.random.uniform(-np.pi, np.pi)
                 rot_matrix = np.array([[np.cos(rand_angle), -np.sin(rand_angle)],
-                                    [np.sin(rand_angle), np.cos(rand_angle)]])
+                                       [np.sin(rand_angle), np.cos(rand_angle)]])
                 input_positions = input_positions @ rot_matrix.T
         elif self.cfg.model.cord_embedding.type == 'input_target':
-            input_positions = self.transform_input_target(input_gps_positions, target_gps_position)
+            input_positions = self.transform_input_target(input_gps_positions, target_waypoint[:3])
         else:
-            raise NotImplementedError(f"Coordinate embedding type {self.cfg.model.cord_embedding} not implemented")
+            raise NotImplementedError(f"Coordinate embedding type {self.cfg.model.cord_embedding.type} not implemented")
 
         input_positions = torch.tensor(input_positions, dtype=torch.float32)
         arrived = torch.tensor(arrived, dtype=torch.float32)
