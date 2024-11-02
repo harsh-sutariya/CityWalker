@@ -7,7 +7,6 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
-from tqdm import tqdm
 
 # Configuration Parameters
 class Config:
@@ -44,6 +43,16 @@ def compute_angle(v1, v2):
     angle_deg = np.degrees(angle_rad)
     return angle_deg
 
+def compute_movement_distance(pose_line):
+    """
+    Compute the movement distance as the norm of the (tx, ty, tz) vector.
+    """
+    tokens = pose_line.split(',')
+    tx = float(tokens[1])
+    ty = float(tokens[2])
+    tz = float(tokens[3])
+    return np.linalg.norm([tx, ty, tz])
+
 def process_pose_files(cfg):
     """
     Process all pose files and categorize each data sample.
@@ -77,7 +86,7 @@ def process_pose_files(cfg):
     os.makedirs(cfg.output_dir, exist_ok=True)
 
     for pose_path in tqdm(pose_paths, desc="Processing pose files"):
-        print(f"Processing pose file: {pose_path}")
+        print(f"\nProcessing pose file: {pose_path}")
         seq_idx = ''.join(filter(str.isdigit, os.path.basename(pose_path)))
         image_folder = os.path.join(cfg.image_root_dir, f'dog_nav_undistort_{seq_idx}')
         if not os.path.exists(image_folder):
@@ -96,7 +105,7 @@ def process_pose_files(cfg):
         # Reference GPS point for local coordinate conversion
         ref_lat, ref_lon, ref_alt = None, None, None
 
-        for i in tqdm(range(0, len(lines), 2)):
+        for i in tqdm(range(0, len(lines), 2), desc=f"Processing samples in {seq_idx}"):
             gps_line = lines[i].strip()
             pose_line = lines[i+1].strip()
 
@@ -181,12 +190,36 @@ def process_pose_files(cfg):
 
             samples.append(sample)
 
+        # ----- New Filtering Step Starts Here -----
+        # Filter out initial samples with movement distance < 0.1 meters
+        print(f"\nFiltering initial samples with movement distance < 0.1m for trajectory {seq_idx}...")
+        movement_distances = [compute_movement_distance(sample['line2']) for sample in samples]
+
+        # Find the first index where movement distance >= 0.1m
+        filter_idx = 0
+        for idx, dist in enumerate(movement_distances):
+            if dist >= 0.1:
+                filter_idx = idx
+                break
+        else:
+            # If no movement distance >= 0.1m, skip this trajectory
+            print(f"All samples in {pose_path} have movement distance < 0.1m. Skipping trajectory {seq_idx}.")
+            continue
+
+        if filter_idx > 0:
+            print(f"Filtered out {filter_idx} initial samples with movement distance < 0.1m from trajectory {seq_idx}.")
+            samples = samples[filter_idx:]
+        else:
+            print(f"No initial samples to filter for trajectory {seq_idx}.")
+
+        # ----- New Filtering Step Ends Here -----
+
         # After loading all samples, process pose-based categories ('turn' and 'action_target_mismatch')
         print(f"Processing pose-based categories for trajectory {seq_idx}...")
-        
+
         num_samples = len(samples)
         if num_samples == 0:
-            print(f"No samples to process for trajectory {seq_idx}.")
+            print(f"No samples to process for trajectory {seq_idx} after filtering. Skipping.")
             continue
 
         # Parse all poses to extract waypoints
@@ -194,13 +227,21 @@ def process_pose_files(cfg):
         for sample in samples:
             pose_line = sample['line2']
             pose_tokens = pose_line.split(',')
-            tx = float(pose_tokens[1])
-            ty = float(pose_tokens[2])
-            tz = float(pose_tokens[3])
-            rx = float(pose_tokens[4])
-            ry = float(pose_tokens[5])
-            rz = float(pose_tokens[6])
-            poses.append([tx, ty, tz, rx, ry, rz])
+            if len(pose_tokens) < 8:
+                print(f"Warning: Pose line '{pose_line}' is malformed. Skipping this sample.")
+                poses.append([0, 0, 0, 0, 0, 0])  # Placeholder for malformed pose
+                continue
+            try:
+                tx = float(pose_tokens[1])
+                ty = float(pose_tokens[2])
+                tz = float(pose_tokens[3])
+                rx = float(pose_tokens[4])
+                ry = float(pose_tokens[5])
+                rz = float(pose_tokens[6])
+                poses.append([tx, ty, tz, rx, ry, rz])
+            except ValueError:
+                print(f"Error parsing pose line '{pose_line}'. Using zero transformation.")
+                poses.append([0, 0, 0, 0, 0, 0])  # Placeholder for parsing error
         poses = np.array(poses)  # Shape: (num_samples, 6)
 
         # Compute transformation matrices for all poses
@@ -219,36 +260,40 @@ def process_pose_files(cfg):
 
         for idx in range(num_samples):
             current_pose_matrix = pose_matrices[idx]
-            current_pose_inv = np.linalg.inv(current_pose_matrix)
-            
+            try:
+                current_pose_inv = np.linalg.inv(current_pose_matrix)
+            except np.linalg.LinAlgError:
+                print(f"Warning: Singular matrix encountered at index {idx} in trajectory {seq_idx}. Using identity matrix.")
+                current_pose_inv = np.eye(4)
+
             # Determine the target index (50th pose after current or last pose)
             target_idx = min(idx + 50, num_samples - 1)
-            
+
             # Extract waypoints: next five poses after current
             waypoint_end_idx = min(idx + 5, num_samples - 1)
             waypoints = pose_matrices[idx + 1: waypoint_end_idx + 1]  # Shape: (num_waypoints, 4, 4)
-            
+
             if waypoints.shape[0] < 5:
                 # If less than five waypoints are available, pad with the last available pose
                 padding = 5 - waypoints.shape[0]
                 last_waypoint = waypoints[-1] if waypoints.shape[0] > 0 else current_pose_matrix
                 padding_waypoints = np.tile(last_waypoint, (padding, 1, 1))
                 waypoints = np.vstack([waypoints, padding_waypoints])
-            
+
             # Define target pose
             target_pose_matrix = pose_matrices[target_idx]
-            
+
             # Transform waypoints and target to the current pose's coordinate frame
             transformed_waypoints = np.matmul(current_pose_inv, waypoints)  # Shape: (5, 4, 4)
             transformed_target = np.matmul(current_pose_inv, target_pose_matrix)  # Shape: (4, 4)
-            
+
             # Extract 2D positions (assuming x and y are the first two coordinates)
             waypoints_2d = transformed_waypoints[:, :2, 3]  # Shape: (5, 2)
             target_2d = transformed_target[:2, 3]  # Shape: (2,)
-            
+
             # Store the transformed target position for potential future use
             positions_2d[idx] = target_2d
-            
+
             # Category 3: Turn
             # Compute the angle between the first waypoint vector and the difference between the fourth and fifth waypoint vectors
             first_vector = waypoints_2d[0]  # Vector from current to first waypoint
