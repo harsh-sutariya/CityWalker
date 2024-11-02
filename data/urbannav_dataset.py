@@ -142,8 +142,8 @@ class UrbanNavDataset(Dataset):
         idx_counter = 0
         for seq_idx, count in enumerate(self.count):
             start_idx = idx_counter
-            # interval = self.context_size if self.mode == 'train' else 1
-            interval = 10
+            interval = self.context_size if self.mode == 'train' else 1
+            # interval = 10
             for pose_start in range(0, count, interval):
                 self.lut.append((seq_idx, pose_start))
                 idx_counter += 1
