@@ -30,7 +30,7 @@ class UrbanNavDataset(Dataset):
         #     if f.startswith('match_gps_pose') and f.endswith('.txt')
         # ]
         pose_files = [
-            "pose_label_1.txt",
+            # "pose_label_1.txt",
             "pose_label_6.txt",
             "pose_label_7.txt",
             "pose_label_8.txt",
@@ -142,7 +142,8 @@ class UrbanNavDataset(Dataset):
         idx_counter = 0
         for seq_idx, count in enumerate(self.count):
             start_idx = idx_counter
-            interval = self.context_size if self.mode == 'train' else 1
+            # interval = self.context_size if self.mode == 'train' else 1
+            interval = 10
             for pose_start in range(0, count, interval):
                 self.lut.append((seq_idx, pose_start))
                 idx_counter += 1
@@ -213,6 +214,7 @@ class UrbanNavDataset(Dataset):
         # Convert to tensors
         waypoints_transformed = torch.tensor(gt_waypoints[:, [0, 1]], dtype=torch.float32)
         step_scale = torch.norm(torch.diff(waypoints_transformed, dim=0, prepend=torch.zeros((1, 2))), p=2, dim=1).mean()
+        step_scale = torch.clamp(step_scale, min=1e-3)
         waypoints_scaled = waypoints_transformed / step_scale
         input_positions_scaled = input_positions / step_scale
 

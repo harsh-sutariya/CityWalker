@@ -171,6 +171,7 @@ class CityWalkDataset(Dataset):
         input_positions = torch.tensor(transformed_input_positions, dtype=torch.float32)
         waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
         step_scale = torch.norm(torch.diff(waypoints_transformed, dim=0, prepend=torch.zeros((1, 2))), p=2, dim=1).mean()
+        step_scale = torch.clamp(step_scale, min=1e-3)
         input_positions_scaled = input_positions / step_scale
         waypoints_scaled = waypoints_transformed / step_scale
         input_positions_scaled[:self.context_size-1] += torch.randn(self.context_size-1, 2) * self.input_noise
