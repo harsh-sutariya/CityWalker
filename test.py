@@ -5,6 +5,7 @@ import argparse
 import yaml
 import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
+from pl_modules.urbannav_datamodule import UrbanNavDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
 import torch
 import glob
@@ -70,8 +71,13 @@ def main():
     test_dir = os.path.join(cfg.project.result_dir, cfg.project.run_name, 'test')
     os.makedirs(test_dir, exist_ok=True)
 
-    # Initialize the DataModule for testing
-    datamodule = CityWalkDataModule(cfg)
+    # Initialize the DataModule
+    if cfg.data.type == 'citywalk':
+        datamodule = CityWalkDataModule(cfg)
+    elif cfg.data.type == 'urbannav':
+        datamodule = UrbanNavDataModule(cfg)
+    else:
+        raise ValueError(f"Invalid dataset: {cfg.data.dataset}")
 
     # Initialize the model
     model = UrbanNavModule(cfg)
