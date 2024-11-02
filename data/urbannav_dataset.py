@@ -212,12 +212,16 @@ class UrbanNavDataset(Dataset):
 
         # Convert to tensors
         waypoints_transformed = torch.tensor(gt_waypoints[:, [0, 1]], dtype=torch.float32)
+        step_scale = torch.norm(torch.diff(waypoints_transformed, dim=0, prepend=torch.zeros((1, 2))), p=2, dim=1).mean()
+        waypoints_scaled = waypoints_transformed / step_scale
+        input_positions_scaled = input_positions / step_scale
 
         sample = {
             'video_frames': frames,
-            'input_positions': input_positions,
-            'waypoints': waypoints_transformed,
-            'arrived': arrived
+            'input_positions': input_positions_scaled,
+            'waypoints': waypoints_scaled,
+            'arrived': arrived,
+            'step_scale': step_scale
         }
         # print("input", input_positions)
         # print("history", history_positions)

@@ -129,11 +129,12 @@ class UrbanNavModule(pl.LightningModule):
         self.log('val/direction_loss', direction_loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
         
         # Handle visualization
+        wp_pred_vis = wp_pred * batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
         self.process_visualization(
             mode='val',
             batch=batch,
             obs=obs,
-            wp_pred=wp_pred,
+            wp_pred=wp_pred_vis,
             arrive_pred=arrive_pred
         )
         
@@ -193,9 +194,11 @@ class UrbanNavModule(pl.LightningModule):
         elif self.datatype == "urbannav":
             category = batch['categories']
             wp_pred, arrive_pred = self(obs, cord)
+            wp_pred *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
             
             # Compute L1 loss for waypoints
             waypoints_target = batch['waypoints']
+            waypoints_target *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
             l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='none')
             
             # Compute accuracy for "arrived" prediction
@@ -240,6 +243,8 @@ class UrbanNavModule(pl.LightningModule):
 
         
         # Handle visualization
+        if self.datatype == "citywalk":
+            wp_pred *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
         if self.output_coordinate_repr == "euclidean":
             self.process_visualization(
                 mode='test',
@@ -326,23 +331,17 @@ class UrbanNavModule(pl.LightningModule):
         arrived_loss = F.binary_cross_entropy_with_logits(arrive_pred.flatten(), arrived_target)
 
         # Compute direction loss
-        wp_pred_last = wp_pred[:, -1, :]  # shape [batch_size, 2]
-        wp_target_last = waypoints_target[:, -1, :]  # shape [batch_size, 2]
+        wp_pred_view = wp_pred.view(-1, 2)
+        wp_target_view = waypoints_target.view(-1, 2)
 
         # Compute cosine similarity
-        dot_product = (wp_pred_last * wp_target_last).sum(dim=1)  # shape [batch_size]
-        norm_pred = wp_pred_last.norm(dim=1)  # shape [batch_size]
-        norm_target = wp_target_last.norm(dim=1)  # shape [batch_size]
+        dot_product = (wp_pred_view * wp_target_view).sum(dim=1)  # shape [batch_size]
+        norm_pred = wp_pred_view.norm(dim=1)  # shape [batch_size]
+        norm_target = wp_target_view.norm(dim=1)  # shape [batch_size]
         cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
 
         # Loss is 1 - cos_sim
         direction_loss = 1 - cos_sim.mean()
-
-        if self.do_normalize:
-            wp_scale = waypoints_target[:, 0, :].norm(p=2, dim=1).mean()
-            wp_loss = wp_loss / wp_scale
-            # Optionally, normalize direction_loss as well
-            # direction_loss = direction_loss / wp_scale
 
         return {'waypoints_loss': wp_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss}
     
@@ -372,9 +371,6 @@ class UrbanNavModule(pl.LightningModule):
 
         # Loss is 1 - cos_sim
         direction_loss = (1 - cos_sim.mean()) ** 2
-
-        if self.do_normalize:
-            distance_loss = distance_loss / distance_target.mean()
 
         return {'distance_loss': distance_loss, 'angle_loss': angle_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss}
 

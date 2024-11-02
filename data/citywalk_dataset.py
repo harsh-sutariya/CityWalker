@@ -150,9 +150,9 @@ class CityWalkDataset(Dataset):
         # Extract waypoints
         waypoint_poses = self.extract_waypoints(pose, pose_start)
 
-        # Add noise if necessary
-        if self.input_noise > 0:
-            input_poses = self.add_noise(input_poses)
+        # # Add noise if necessary
+        # if self.input_noise > 0:
+        #     input_poses = self.add_noise(input_poses)
 
         # Transform poses
         current_pose = input_poses[-1]
@@ -170,22 +170,28 @@ class CityWalkDataset(Dataset):
         # Convert data to tensors
         input_positions = torch.tensor(transformed_input_positions, dtype=torch.float32)
         waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
+        step_scale = torch.norm(torch.diff(waypoints_transformed, dim=0, prepend=torch.zeros((1, 2))), p=2, dim=1).mean()
+        input_positions_scaled = input_positions / step_scale
+        waypoints_scaled = waypoints_transformed / step_scale
+        input_positions_scaled[:self.context_size-1] += torch.randn(self.context_size-1, 2) * self.input_noise
         arrived = torch.tensor(arrived, dtype=torch.float32)
         sample = {
             'video_frames': frames,
-            'input_positions': input_positions,
-            'waypoints': waypoints_transformed,
-            'arrived': arrived
+            'input_positions': input_positions_scaled,
+            'waypoints': waypoints_scaled,
+            'arrived': arrived,
+            'step_scale': step_scale
         }
 
         # For visualization during validation
         if self.mode in ['val', 'test']:
-            vis_input_positions = self.transform_poses(input_poses, current_pose)
+            # vis_input_positions = self.transform_poses(input_poses, current_pose)
             transformed_original_input_positions = self.transform_poses(original_input_poses, current_pose)
             target_transformed = self.transform_target_pose(target_pose, current_pose)
 
             original_input_positions = torch.tensor(transformed_original_input_positions[:, [0, 2]], dtype=torch.float32)
-            noisy_input_positions = torch.tensor(vis_input_positions[:, [0, 2]], dtype=torch.float32)
+            # noisy_input_positions = torch.tensor(vis_input_positions[:, [0, 2]], dtype=torch.float32)
+            noisy_input_positions = input_positions_scaled[:-1] * step_scale
             target_transformed_position = torch.tensor(target_transformed[[0, 2]], dtype=torch.float32)  # Only X and Z
             sample['original_input_positions'] = original_input_positions
             sample['noisy_input_positions'] = noisy_input_positions
@@ -239,11 +245,11 @@ class CityWalkDataset(Dataset):
         waypoint_poses = pose[waypoint_start: waypoint_end]
         return waypoint_poses
 
-    def add_noise(self, input_poses):
-        noise = np.random.normal(0, self.input_noise, input_poses[:, :3].shape)
-        scale = np.linalg.norm(input_poses[-1, :3] - input_poses[-2, :3])
-        input_poses[:, :3] += noise * scale
-        return input_poses
+    # def add_noise(self, input_poses):
+    #     noise = np.random.normal(0, self.input_noise, input_poses[:, :3].shape)
+    #     scale = np.linalg.norm(input_poses[-1, :3] - input_poses[-2, :3])
+    #     input_poses[:, :3] += noise * scale
+    #     return input_poses
 
     def process_frames(self, frames):
         frames = torch.tensor(frames).permute(0, 3, 1, 2).float() / 255.0  # Corrected normalization
