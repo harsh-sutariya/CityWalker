@@ -29,10 +29,11 @@ class UrbanNav(nn.Module):
             self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
         # Observation Encoder
-        if self.obs_encoder_type .split("-")[0] == "efficientnet":
-            self.obs_encoder = EfficientNet.from_name(self.obs_encoder_type , in_channels=3)
-            self.num_obs_features = self.obs_encoder._fc.in_features
-            self.obs_encoder._fc = nn.Identity()  # Remove classification layer
+        if self.obs_encoder_type.startswith("efficientnet"):
+            model_constructor = getattr(models, self.obs_encoder_type)
+            self.obs_encoder = model_constructor(weights="DEFAULT")
+            self.num_obs_features = self.obs_encoder.classifier[1].in_features
+            self.obs_encoder.classifier = nn.Identity()  # Remove classification layer
         elif self.obs_encoder_type.startswith("resnet"):
             model_constructor = getattr(models, self.obs_encoder_type)
             self.obs_encoder = model_constructor(weights="DEFAULT")
@@ -145,9 +146,7 @@ class UrbanNav(nn.Module):
 
         # Observation Encoding
         if self.obs_encoder_type.startswith("efficientnet"):
-            obs_enc = self.obs_encoder.extract_features(obs)
-            obs_enc = self.obs_encoder._avg_pooling(obs_enc)
-            obs_enc = obs_enc.flatten(start_dim=1)
+            obs_enc = self.obs_encoder(obs)
         elif self.obs_encoder_type.startswith("resnet"):
             x = self.obs_encoder.conv1(obs)
             x = self.obs_encoder.bn1(x)
