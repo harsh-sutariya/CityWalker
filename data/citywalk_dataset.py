@@ -58,7 +58,7 @@ class CityWalkDataset(Dataset):
         elif mode == 'val':
             self.pose_path = self.pose_path[cfg.data.num_train: cfg.data.num_train + cfg.data.num_val]
         elif mode == 'test':
-            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test:]
+            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test]
         else:
             raise ValueError(f"Invalid mode {mode}")
 
@@ -96,7 +96,7 @@ class CityWalkDataset(Dataset):
         idx_counter = 0
         for video_idx, count in enumerate(self.count):
             start_idx = idx_counter
-            interval = self.context_size if self.mode == 'train' else 1
+            interval = self.context_size
             for pose_start in range(0, count, interval):
                 self.lut.append((video_idx, pose_start))
                 idx_counter += 1
