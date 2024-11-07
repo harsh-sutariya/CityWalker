@@ -18,7 +18,7 @@ class Config:
     # Categorization Thresholds
     CROWD_THRESHOLD = 5  # N = 5 people
     PERSON_CLOSE_BY_AREA_THRESHOLD = 40000  # pixels squared
-    TURN_ANGLE_THRESHOLD = 30  # degrees
+    TURN_ANGLE_THRESHOLD = 20  # degrees
     ACTION_TARGET_MISMATCH_THRESHOLD = 45  # degrees
     CATEGORY_WINDOW = 0  # Previous and next 10 samples
     CROSS_THRESHOLD = 0  # pixels squared
@@ -69,7 +69,6 @@ def process_pose_files(cfg):
 
     # Load predefined pose files
     pose_files = [
-        "match_gps_ros_pose1.txt",
         "match_gps_ros_pose6.txt",
         "match_gps_ros_pose7.txt",
         "match_gps_ros_pose8.txt",
@@ -124,12 +123,6 @@ def process_pose_files(cfg):
 
             # Parse pose data
             pose_tokens = pose_line.split(',')
-            tx = float(pose_tokens[1])
-            ty = float(pose_tokens[2])
-            tz = float(pose_tokens[3])
-            rx = float(pose_tokens[4])
-            ry = float(pose_tokens[5])
-            rz = float(pose_tokens[6])
             image_name = f"forward_{int(pose_tokens[7]):04d}.jpg"
 
             # Load the image
@@ -273,13 +266,6 @@ def process_pose_files(cfg):
             waypoint_end_idx = min(idx + 5, num_samples - 1)
             waypoints = pose_matrices[idx + 1: waypoint_end_idx + 1]  # Shape: (num_waypoints, 4, 4)
 
-            if waypoints.shape[0] < 5:
-                # If less than five waypoints are available, pad with the last available pose
-                padding = 5 - waypoints.shape[0]
-                last_waypoint = waypoints[-1] if waypoints.shape[0] > 0 else current_pose_matrix
-                padding_waypoints = np.tile(last_waypoint, (padding, 1, 1))
-                waypoints = np.vstack([waypoints, padding_waypoints])
-
             # Define target pose
             target_pose_matrix = pose_matrices[target_idx]
 
@@ -291,24 +277,18 @@ def process_pose_files(cfg):
             waypoints_2d = transformed_waypoints[:, :2, 3]  # Shape: (5, 2)
             target_2d = transformed_target[:2, 3]  # Shape: (2,)
 
-            # Store the transformed target position for potential future use
-            positions_2d[idx] = target_2d
-
             # Category 3: Turn
             # Compute the angle between the first waypoint vector and the difference between the fourth and fifth waypoint vectors
-            first_vector = waypoints_2d[0]  # Vector from current to first waypoint
-            if waypoints_2d.shape[0] >= 5:
-                vector_diff = waypoints_2d[4] - waypoints_2d[3]  # Difference between 4th and 5th waypoints
-                angle_turn = compute_angle(first_vector, vector_diff)
-                if angle_turn > cfg.TURN_ANGLE_THRESHOLD:
-                    samples[idx]['categories']['turn'] = 1
+            last_vector = waypoints_2d[-1]
+            current_orientation = np.array([-1, 0])
+            angle_turn = compute_angle(current_orientation, last_vector)
+            if angle_turn > cfg.TURN_ANGLE_THRESHOLD:
+                samples[idx]['categories']['turn'] = 1
 
             # Category 4: Action-Target Mismatch
             # Compute the mean of waypoint differences
             if waypoints_2d.shape[0] >= 2:
-                diffs = np.diff(waypoints_2d, axis=0)  # Shape: (4, 2)
-                mean_diff = diffs.mean(axis=0)  # Shape: (2,)
-                angle_mismatch = compute_angle(mean_diff, target_2d)
+                angle_mismatch = compute_angle(last_vector, target_2d)
                 if angle_mismatch > cfg.ACTION_TARGET_MISMATCH_THRESHOLD:
                     samples[idx]['categories']['action_target_mismatch'] = 1
 

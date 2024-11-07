@@ -61,6 +61,12 @@ def main():
 
     # Initialize the model from checkpoint
     model = UrbanNavModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
+    # for param in model.model.compress_goal_enc.parameters():
+    #     param.requires_grad = False
+    # for param in model.model.decoder.parameters():
+    #     param.requires_grad = False
+    # for param in model.model.decoder.output_layers.parameters():
+    #     param.requires_grad = True
     print(f"Loaded model from checkpoint: {args.checkpoint}")
     print(pl.utilities.model_summary.ModelSummary(model, max_depth=2))
 
@@ -90,7 +96,7 @@ def main():
         monitor='val/direction_loss',
     )
 
-    num_gpu = torch.cuda.device_count()
+    num_gpu = 1
 
     # Set up Trainer
     trainer = pl.Trainer(
@@ -105,7 +111,6 @@ def main():
             pl.callbacks.TQDMProgressBar(refresh_rate=cfg.logging.pbar_rate),
         ],
         log_every_n_steps=1,
-        strategy=DDPStrategy(find_unused_parameters=True) if num_gpu > 1 else None,
     )
 
     # Start fine-tuning

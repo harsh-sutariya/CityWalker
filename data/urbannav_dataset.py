@@ -48,7 +48,7 @@ class UrbanNavDataset(Dataset):
         elif mode == 'val':
             self.pose_path = self.pose_path[cfg.data.num_train: cfg.data.num_train + cfg.data.num_val]
         elif mode == 'test':
-            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test:]
+            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test]
         else:
             raise ValueError(f"Invalid mode {mode}")
 
@@ -246,7 +246,8 @@ class UrbanNavDataset(Dataset):
                 sample['target_transformed'] = input_positions[-1, :]
 
         if self.mode == 'test':
-            categories = self.categories[sequence_idx][pose_start + self.context_size]
+            categories = self.categories[sequence_idx][pose_start + self.context_size - 1]
+            # categories = self.categories[sequence_idx][pose_start]
             sample['categories'] = torch.tensor(categories, dtype=torch.float32)
 
         return sample
