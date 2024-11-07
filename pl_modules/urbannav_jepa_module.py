@@ -300,8 +300,6 @@ class UrbanNavJEPAModule(pl.LightningModule):
         # Loss is 1 - cos_sim
         direction_loss = 1 - cos_sim.mean()
 
-        print(f"Feature loss: {feature_loss:.4f}, Waypoints loss: {wp_loss:.4f}, Arrived loss: {arrived_loss:.4f}, Direction loss: {direction_loss:.4f}")
-
         return {'waypoints_loss': wp_loss, 'arrived_loss': arrived_loss, 'direction_loss': direction_loss, 'feature_loss': feature_loss}
     
     def compute_loss_polar(self, wp_pred_euclidean, distance_pred, angle_pred, arrive_pred, batch):
