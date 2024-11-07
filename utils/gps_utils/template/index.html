@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Geolocation Tracker</title>
+</head>
+
+<body>
+    <h1>Geolocation Tracker</h1>
+    <button onclick="startTracking()">Start</button>
+    <button onclick="stopTracking()">Stop</button>
+    <div id="status">Status: Stopped</div>
+    <pre id="data"></pre>
+
+    <script>
+        var tracking = false;
+        var watchId = null;
+
+        function startTracking() {
+            if (tracking) return;
+            tracking = true;
+            document.getElementById('status').innerText = 'Status: Tracking...';
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    successCallback,
+                    errorCallback,
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 10000 // Adjust timeout as needed
+                    }
+                );
+            } else {
+                console.error('Geolocation is not supported by this browser.');
+            }
+        }
+
+        function stopTracking() {
+            if (!tracking) return;
+            tracking = false;
+            document.getElementById('status').innerText = 'Status: Stopped';
+            navigator.geolocation.clearWatch(watchId);
+        }
+
+        function successCallback(position) {
+            var data = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                altitude: position.coords.altitude,
+                altitudeAccuracy: position.coords.altitudeAccuracy,
+                heading: position.coords.heading,
+                speed: position.coords.speed
+            };
+            // Display data on the page
+            document.getElementById('data').innerText = JSON.stringify(data, null, 2);
+            // Send data to the server
+            fetch('/location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            }).then(function (response) {
+                // Handle response if needed
+            }).catch(function (error) {
+                console.error('Error:', error);
+            });
+        }
+
+        function errorCallback(error) {
+            console.error('Geolocation error:', error);
+        }
+    </script>
+</body>
+
+</html>
