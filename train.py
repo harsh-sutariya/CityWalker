@@ -7,6 +7,8 @@ import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
 from pl_modules.urbannav_datamodule import UrbanNavDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
+from pl_modules.urbannav_jepa_module import UrbanNavJEPAModule
+from pl_modules.citywalk_jepa_datamodule import CityWalkJEPADataModule
 from pytorch_lightning.strategies import DDPStrategy
 import torch
 import glob
@@ -80,11 +82,18 @@ def main():
         datamodule = CityWalkDataModule(cfg)
     elif cfg.data.type == 'urbannav':
         datamodule = UrbanNavDataModule(cfg)
+    elif cfg.data.type == 'citywalk_jepa':
+        datamodule = CityWalkJEPADataModule(cfg)
     else:
         raise ValueError(f"Invalid dataset: {cfg.data.dataset}")
 
     # Initialize the model
-    model = UrbanNavModule(cfg)
+    if cfg.model.type == 'urbannav':
+        model = UrbanNavModule(cfg)
+    elif cfg.model.type == 'urbannav_jepa':
+        model = UrbanNavJEPAModule(cfg)
+    else:
+        raise ValueError(f"Invalid model: {cfg.model.type}")
     print(pl.utilities.model_summary.ModelSummary(model, max_depth=2))
         
     # Initialize logger
