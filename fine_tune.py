@@ -60,9 +60,9 @@ def main():
 
     # Initialize the model
     if cfg.model.type == 'urbannav':
-        model = UrbanNavModule(cfg)
+        model = UrbanNavModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
     elif cfg.model.type == 'urbannav_jepa':
-        model = UrbanNavJEPAModule(cfg)
+        model = UrbanNavJEPAModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
     else:
         raise ValueError(f"Invalid model: {cfg.model.type}")
     print(f"Loaded model from checkpoint: {args.checkpoint}")

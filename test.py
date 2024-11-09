@@ -7,6 +7,7 @@ import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
 from pl_modules.urbannav_datamodule import UrbanNavDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
+from pl_modules.urbannav_jepa_module import UrbanNavJEPAModule
 import torch
 import glob
 
@@ -79,9 +80,6 @@ def main():
     else:
         raise ValueError(f"Invalid dataset: {cfg.data.dataset}")
 
-    # Initialize the model
-    model = UrbanNavModule(cfg)
-
     # Determine the checkpoint path
     if args.checkpoint:
         checkpoint_path = args.checkpoint
@@ -96,7 +94,12 @@ def main():
         print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
 
     # Load the model from the checkpoint
-    model = UrbanNavModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
+    if cfg.model.type == 'urbannav':
+        model = UrbanNavModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
+    elif cfg.model.type == 'urbannav_jepa':
+        model = UrbanNavJEPAModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
+    else:
+        raise ValueError(f"Invalid model: {cfg.model.type}")
     model.result_dir = test_dir
     print(f"Loaded model from checkpoint: {checkpoint_path}")
 
