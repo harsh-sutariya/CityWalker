@@ -139,13 +139,14 @@ class UrbanNavJEPAModule(pl.LightningModule):
             # Compute cosine similarity
             wp_pred_view = wp_pred.view(-1, 2)
             waypoints_target_view = waypoints_target.view(-1, 2)
-            dot_product = (wp_pred_view * waypoints_target_view).sum(dim=1)  # shape [batch_size]
-            norm_pred = wp_pred_view.norm(dim=1)  # shape [batch_size]
-            norm_target = waypoints_target_view.norm(dim=1)  # shape [batch_size]
-            cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
+            # dot_product = (wp_pred_view * waypoints_target_view).sum(dim=1)  # shape [batch_size]
+            # norm_pred = wp_pred_view.norm(dim=1)  # shape [batch_size]
+            # norm_target = waypoints_target_view.norm(dim=1)  # shape [batch_size]
+            # cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
+            cos_sim = F.cosine_similarity(wp_pred_view, waypoints_target_view, dim=1)
             
             # Compute angle in degrees
-            angle = torch.acos(cos_sim.clamp(-1+1e-7, 1-1e-7)) * 180 / torch.pi  # shape [batch_size]
+            angle = torch.acos(cos_sim) * 180 / torch.pi  # shape [batch_size]
             angle = angle.view(B, T)
             
             # Take mean angle
@@ -164,7 +165,8 @@ class UrbanNavJEPAModule(pl.LightningModule):
             # Compute L1 loss for waypoints
             waypoints_target = batch['waypoints']
             waypoints_target *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
-            l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='none')
+            # l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='none')
+            l1_loss = F.mse_loss(wp_pred, waypoints_target, reduction='none') ** 0.5
             
             # Compute accuracy for "arrived" prediction
             arrived_target = batch['arrived']
@@ -175,36 +177,41 @@ class UrbanNavJEPAModule(pl.LightningModule):
             # Compute cosine similarity
             wp_pred_view = wp_pred.view(-1, 2)
             waypoints_target_view = waypoints_target.view(-1, 2)
-            dot_product = (wp_pred_view * waypoints_target_view).sum(dim=1)  # shape [batch_size]
-            norm_pred = wp_pred_view.norm(dim=1)  # shape [batch_size]
-            norm_target = waypoints_target_view.norm(dim=1)  # shape [batch_size]
-            cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
+            # dot_product = (wp_pred_view * waypoints_target_view).sum(dim=1)  # shape [batch_size]
+            # norm_pred = wp_pred_view.norm(dim=1)  # shape [batch_size]
+            # norm_target = waypoints_target_view.norm(dim=1)  # shape [batch_size]
+            # cos_sim = dot_product / (norm_pred * norm_target + 1e-8)  # avoid division by zero
+            cos_sim = F.cosine_similarity(wp_pred_view, waypoints_target_view, dim=1)
             # Compute angle in degrees
-            angle = torch.acos(cos_sim.clamp(-1+1e-7, 1-1e-7)) * 180 / torch.pi  # shape [batch_size]
+            angle = torch.acos(cos_sim) * 180 / torch.pi  # shape [batch_size]
             angle = angle.view(B, T)
+
+            gt_wp_last_norm = waypoints_target[:, -1, :].norm(dim=1)
 
             for batch_idx in range(B):
                 for category_idx in range(self.num_categories):
                     if category[batch_idx, category_idx] == 1:
                         category_name = self.test_catetories[category_idx]
-                        self.test_metrics[category_name]['l1_loss'].append(l1_loss[batch_idx].mean().item())
+                        self.test_metrics[category_name]['l1_loss'].append(l1_loss[batch_idx].max().item())
                         self.test_metrics[category_name]['arrived_accuracy'].append(correct[batch_idx].item())
-                        self.test_metrics[category_name]['mean_angle'].append(angle[batch_idx].mean().cpu().numpy())
-                        self.test_metrics[category_name]['angle_step1'].append(angle[batch_idx, 0].cpu().numpy())
-                        self.test_metrics[category_name]['angle_step2'].append(angle[batch_idx, 1].cpu().numpy())
-                        self.test_metrics[category_name]['angle_step3'].append(angle[batch_idx, 2].cpu().numpy())
-                        self.test_metrics[category_name]['angle_step4'].append(angle[batch_idx, 3].cpu().numpy())
-                        self.test_metrics[category_name]['angle_step5'].append(angle[batch_idx, 4].cpu().numpy())
+                        if gt_wp_last_norm[batch_idx] > 1:
+                            self.test_metrics[category_name]['mean_angle'].append(angle[batch_idx].max().item())
+                            self.test_metrics[category_name]['angle_step1'].append(angle[batch_idx, 0].item())
+                            self.test_metrics[category_name]['angle_step2'].append(angle[batch_idx, 1].item())
+                            self.test_metrics[category_name]['angle_step3'].append(angle[batch_idx, 2].item())
+                            self.test_metrics[category_name]['angle_step4'].append(angle[batch_idx, 3].item())
+                            self.test_metrics[category_name]['angle_step5'].append(angle[batch_idx, 4].item())
                     else:
                         continue
-                self.test_metrics['overall']['l1_loss'].append(l1_loss[batch_idx].mean().item())
+                self.test_metrics['overall']['l1_loss'].append(l1_loss[batch_idx].max().item())
                 self.test_metrics['overall']['arrived_accuracy'].append(correct[batch_idx].item())
-                self.test_metrics['overall']['mean_angle'].append(angle[batch_idx].mean().cpu().numpy())
-                self.test_metrics['overall']['angle_step1'].append(angle[batch_idx, 0].cpu().numpy())
-                self.test_metrics['overall']['angle_step2'].append(angle[batch_idx, 1].cpu().numpy())
-                self.test_metrics['overall']['angle_step3'].append(angle[batch_idx, 2].cpu().numpy())
-                self.test_metrics['overall']['angle_step4'].append(angle[batch_idx, 3].cpu().numpy())
-                self.test_metrics['overall']['angle_step5'].append(angle[batch_idx, 4].cpu().numpy())
+                if gt_wp_last_norm[batch_idx] > 1:
+                    self.test_metrics['overall']['mean_angle'].append(angle[batch_idx].max().item())
+                    self.test_metrics['overall']['angle_step1'].append(angle[batch_idx, 0].item())
+                    self.test_metrics['overall']['angle_step2'].append(angle[batch_idx, 1].item())
+                    self.test_metrics['overall']['angle_step3'].append(angle[batch_idx, 2].item())
+                    self.test_metrics['overall']['angle_step4'].append(angle[batch_idx, 3].item())
+                    self.test_metrics['overall']['angle_step5'].append(angle[batch_idx, 4].item())
 
         
         # Handle visualization
@@ -242,10 +249,19 @@ class UrbanNavJEPAModule(pl.LightningModule):
         elif self.datatype == "urbannav":
             import pandas as pd
             for category in self.test_catetories:
+                # Add a new 'count' metric for each category by counting 'l1_loss' entries
+                self.test_metrics[category]['count'] = len(self.test_metrics[category]['l1_loss'])
+            self.test_metrics['overall']['count'] = sum(self.test_metrics[category]['count'] for category in self.test_catetories)
+            self.test_metrics['mean']['count'] = 0
+
+            for category in self.test_catetories:
                 for metric in self.test_metrics[category]:
-                    self.test_metrics[category][metric] = np.array(self.test_metrics[category][metric]).mean()
+                    if metric != 'count':
+                        # print(f"{category} {metric}: {self.test_metrics[category][metric]}")
+                        self.test_metrics[category][metric] = np.nanmean(np.array(self.test_metrics[category][metric]))
             for metric in self.test_metrics['overall']:
-                self.test_metrics['overall'][metric] = np.array(self.test_metrics['overall'][metric]).mean()
+                if metric != 'count':
+                    self.test_metrics['overall'][metric] = np.nanmean(np.array(self.test_metrics['overall'][metric]))
             metrics = ['l1_loss', 'arrived_accuracy', 'angle_step1', 'angle_step2', 'angle_step3', 'angle_step4', 'angle_step5', 'mean_angle']
             for metric in metrics:
                 category_val = []
@@ -431,13 +447,13 @@ class UrbanNavJEPAModule(pl.LightningModule):
             pred_waypoints = wp_pred[idx].detach().cpu().numpy()
             target_transformed = batch['target_transformed'][idx].cpu().numpy()
 
-            if self.do_normalize:
-                step_length = np.linalg.norm(gt_waypoints, axis=1).mean()
-                original_input_positions = original_input_positions / step_length
-                noisy_input_positions = noisy_input_positions / step_length
-                gt_waypoints = gt_waypoints / step_length
-                pred_waypoints = pred_waypoints / step_length
-                target_transformed = target_transformed / step_length
+            # if self.do_normalize:
+            #     step_length = np.linalg.norm(gt_waypoints, axis=1).mean()
+            #     original_input_positions = original_input_positions / step_length
+            #     noisy_input_positions = noisy_input_positions / step_length
+            #     gt_waypoints = gt_waypoints / step_length
+            #     pred_waypoints = pred_waypoints / step_length
+            #     target_transformed = target_transformed / step_length
 
             # Get the last frame from the sequence
             frame = obs[idx, -1].permute(1, 2, 0).cpu().numpy()
