@@ -79,18 +79,24 @@ class UrbanNavJEPA(nn.Module):
         """
         B, N, _, H, W = obs.shape
         obs = obs.view(B * N, 3, H, W)
-        future_obs = future_obs.view(B * N, 3, H, W)
+        if future_obs:
+            future_obs = future_obs.view(B * N, 3, H, W)
         if self.do_rgb_normalize:
             obs = (obs - self.mean) / self.std
-            future_obs = (future_obs - self.mean) / self.std
+            if future_obs:
+                future_obs = (future_obs - self.mean) / self.std
         if self.do_resize:
             obs = TF.center_crop(obs, self. crop)
             obs = TF.resize(obs, self.resize)
-            future_obs = TF.center_crop(future_obs, self.crop)
-            future_obs = TF.resize(future_obs, self.resize)
+            if future_obs:
+                future_obs = TF.center_crop(future_obs, self.crop)
+                future_obs = TF.resize(future_obs, self.resize)
 
         obs_enc = self.obs_encoder(obs).view(B, N, -1)
-        future_obs_enc = self.obs_encoder(future_obs).view(B, N, -1)
+        if future_obs:
+            future_obs_enc = self.obs_encoder(future_obs).view(B, N, -1)
+        else:
+            future_obs_enc = None
 
         # Coordinate Encoding
         cord_enc = self.cord_embedding(cord).view(B, -1)

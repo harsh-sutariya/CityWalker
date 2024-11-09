@@ -7,9 +7,8 @@ import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
 from pl_modules.urbannav_datamodule import UrbanNavDataModule
 from pl_modules.urban_nav_module import UrbanNavModule
-from pytorch_lightning.strategies import DDPStrategy
+from pl_modules.urbannav_jepa_module import UrbanNavJEPAModule
 import torch
-import glob
 
 torch.set_float32_matmul_precision('medium')
 pl.seed_everything(42, workers=True)
@@ -59,14 +58,13 @@ def main():
     else:
         raise ValueError(f"Invalid dataset: {cfg.data.type}")
 
-    # Initialize the model from checkpoint
-    model = UrbanNavModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
-    # for param in model.model.compress_goal_enc.parameters():
-    #     param.requires_grad = False
-    # for param in model.model.decoder.parameters():
-    #     param.requires_grad = False
-    # for param in model.model.decoder.output_layers.parameters():
-    #     param.requires_grad = True
+    # Initialize the model
+    if cfg.model.type == 'urbannav':
+        model = UrbanNavModule(cfg)
+    elif cfg.model.type == 'urbannav_jepa':
+        model = UrbanNavJEPAModule(cfg)
+    else:
+        raise ValueError(f"Invalid model: {cfg.model.type}")
     print(f"Loaded model from checkpoint: {args.checkpoint}")
     print(pl.utilities.model_summary.ModelSummary(model, max_depth=2))
 

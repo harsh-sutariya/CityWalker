@@ -50,7 +50,10 @@ class UrbanNavJEPAModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        future_obs = batch['future_video_frames']
+        if "future_video_frames" in batch:
+            future_obs = batch['future_video_frames']
+        else:
+            future_obs = None
         
         wp_pred, arrive_pred, feature_pred, feature_gt = self(obs, cord, future_obs)
         losses = self.compute_loss(wp_pred, arrive_pred, feature_pred, feature_gt, batch)
@@ -71,7 +74,10 @@ class UrbanNavJEPAModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        future_obs = batch['future_video_frames']
+        if "future_video_frames" in batch:
+            future_obs = batch['future_video_frames']
+        else:
+            future_obs = None
         wp_pred, arrive_pred, feature_pred, feature_gt = self(obs, cord, future_obs)
         losses = self.compute_loss(wp_pred, arrive_pred, feature_pred, feature_gt, batch)
         l1_loss = losses['waypoints_loss']
@@ -107,7 +113,10 @@ class UrbanNavJEPAModule(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        future_obs = batch['future_video_frames']
+        if "future_video_frames" in batch:
+            future_obs = batch['future_video_frames']
+        else:
+            future_obs = None
         B, T, _, _, _ = obs.shape
         
         if self.datatype == "citywalk":
@@ -283,7 +292,10 @@ class UrbanNavJEPAModule(pl.LightningModule):
     def compute_loss(self, wp_pred, arrive_pred, feature_pred, feature_gt, batch):
         waypoints_target = batch['waypoints']
         arrived_target = batch['arrived']
-        feature_loss = F.mse_loss(feature_pred, feature_gt)
+        if feature_pred is not None and feature_gt is not None:
+            feature_loss = F.mse_loss(feature_pred, feature_gt)
+        else:
+            feature_loss = 0.0
         wp_loss = F.l1_loss(wp_pred, waypoints_target)
         arrived_loss = F.binary_cross_entropy_with_logits(arrive_pred.flatten(), arrived_target)
 
