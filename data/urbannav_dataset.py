@@ -136,6 +136,10 @@ class UrbanNavDataset(Dataset):
         self.image_names = [self.image_names[i] for i in valid_indices]
         self.image_folders = [self.image_folders[i] for i in valid_indices]
         self.count = [self.count[i] for i in valid_indices]
+        self.step_scale = []
+        for pose in self.poses:
+            step_scale = np.linalg.norm(np.diff(pose[:, [0, 1]], axis=0), axis=1).mean()
+            self.step_scale.append(step_scale)
 
         self.lut = []
         self.sequence_ranges = []
@@ -213,8 +217,8 @@ class UrbanNavDataset(Dataset):
 
         # Convert to tensors
         waypoints_transformed = torch.tensor(gt_waypoints[:, [0, 1]], dtype=torch.float32)
-        step_scale = torch.norm(torch.diff(waypoints_transformed, dim=0, prepend=torch.zeros((1, 2))), p=2, dim=1).mean()
-        step_scale = torch.clamp(step_scale, min=1e-3)
+        step_scale = torch.tensor(self.step_scale[sequence_idx], dtype=torch.float32)
+        step_scale = torch.clamp(step_scale, min=1e-2)
         waypoints_scaled = waypoints_transformed / step_scale
         input_positions_scaled = input_positions / step_scale
 

@@ -89,6 +89,10 @@ class CityWalkJEPADataset(Dataset):
         self.poses = [self.poses[i] for i in valid_indices]
         self.video_path = [self.video_path[i] for i in valid_indices]
         self.count = [self.count[i] for i in valid_indices]
+        self.step_scale = []
+        for pose in self.poses:
+            step_scale = np.linalg.norm(np.diff(pose[:, [0, 2]], axis=0), axis=1).mean()
+            self.step_scale.append(step_scale)
 
         # Build the look-up table and video_ranges
         self.lut = []
@@ -172,8 +176,8 @@ class CityWalkJEPADataset(Dataset):
         # Convert data to tensors
         input_positions = torch.tensor(transformed_input_positions, dtype=torch.float32)
         waypoints_transformed = torch.tensor(waypoints_transformed[:, [0, 2]], dtype=torch.float32)
-        step_scale = torch.norm(torch.diff(waypoints_transformed, dim=0, prepend=torch.zeros((1, 2))), p=2, dim=1).mean()
-        step_scale = torch.clamp(step_scale, min=1e-3)
+        step_scale = torch.tensor(self.step_scale[video_idx], dtype=torch.float32)
+        step_scale = torch.clamp(step_scale, min=1e-2)
         input_positions_scaled = input_positions / step_scale
         waypoints_scaled = waypoints_transformed / step_scale
         input_positions_scaled[:self.context_size-1] += torch.randn(self.context_size-1, 2) * self.input_noise
@@ -257,8 +261,40 @@ class CityWalkJEPADataset(Dataset):
 
     def process_frames(self, frames):
         frames = torch.tensor(frames).permute(0, 3, 1, 2).float() / 255.0  # Corrected normalization
-        # frames = TF.resize(frames, [224, 224])
-        # frames = TF.normalize(frames, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # Desired resolution
+        desired_height = 360
+        desired_width = 640
+        
+        # Current resolution
+        _, _, H, W = frames.shape
+        
+        # Calculate padding needed
+        pad_height = desired_height - H
+        pad_width = desired_width - W
+        
+        # Only pad if necessary
+        if pad_height > 0 or pad_width > 0:
+            # Calculate padding for each side (left, right, top, bottom)
+            pad_top = pad_height // 2
+            pad_bottom = pad_height - pad_top
+            pad_left = pad_width // 2
+            pad_right = pad_width - pad_left
+            
+            # Apply padding
+            frames = TF.pad(
+                frames, 
+                (pad_left, pad_top, pad_right, pad_bottom),
+                mode='constant', 
+                value=0  # Padding value (black)
+            )
+            
+            # Optional: Verify the new shape
+            assert frames.shape[2] == desired_height and frames.shape[3] == desired_width, \
+                f"Padded frames have incorrect shape: {frames.shape}. Expected ({desired_height}, {desired_width})"
+            
+        if pad_height < 0  or pad_width < 0:
+            frames = TF.center_crop(frames, (desired_height, desired_width))
+        
         return frames
 
     def transform_waypoints(self, waypoint_poses, current_pose_array):
