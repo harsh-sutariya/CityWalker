@@ -284,8 +284,6 @@ class CityWalkJEPADataset(Dataset):
             frames = TF.pad(
                 frames, 
                 (pad_left, pad_top, pad_right, pad_bottom),
-                mode='constant', 
-                value=0  # Padding value (black)
             )
             
             # Optional: Verify the new shape
