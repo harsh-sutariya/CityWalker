@@ -56,9 +56,9 @@ class CityWalkJEPADataset(Dataset):
         if mode == 'train':
             self.pose_path = self.pose_path[:cfg.data.num_train]
         elif mode == 'val':
-            self.pose_path = self.pose_path[cfg.data.num_train: cfg.data.num_train + cfg.data.num_val]
+                        self.pose_path = self.pose_path[-cfg.data.num_val:]
         elif mode == 'test':
-            self.pose_path = self.pose_path[cfg.data.num_train + cfg.data.num_val: cfg.data.num_train + cfg.data.num_val + cfg.data.num_test:]
+            self.pose_path = self.pose_path[-cfg.data.num_test:]
         else:
             raise ValueError(f"Invalid mode {mode}")
 
