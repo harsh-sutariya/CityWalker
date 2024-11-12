@@ -40,6 +40,15 @@ class UrbanNavDataset(Dataset):
             "pose_label_17.txt",
             "pose_label_18.txt",
             "pose_label_21.txt",
+            "pose_label_23.txt",
+            "pose_label_24.txt",
+            "pose_label_25.txt",
+            "pose_label_26.txt",
+            "pose_label_27.txt",
+            "pose_label_28.txt",
+            "pose_label_29.txt",
+            "pose_label_31.txt",
+            "pose_label_33.txt",
         ]
         self.pose_path = [os.path.join(self.pose_dir, f) for f in pose_files]
 
