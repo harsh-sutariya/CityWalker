@@ -2,18 +2,18 @@ import pytorch_lightning as pl
 import numpy as np
 import torch
 import torch.nn.functional as F
-from model.urban_nav_jepa import UrbanNavJEPA
+from model.citywalker_feat import CityWalkerFeat
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Agg')
 plt.style.use('seaborn-v0_8')
 import os
 
-class UrbanNavJEPAModule(pl.LightningModule):
+class CityWalkerFeatModule(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.model = UrbanNavJEPA(cfg)
+        self.model = CityWalkerFeat(cfg)
         self.save_hyperparameters(cfg)
         self.do_normalize = cfg.training.normalize_step_length
         self.datatype = cfg.data.type

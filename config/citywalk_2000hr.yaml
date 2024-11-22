@@ -1,11 +1,11 @@
 project:
-  name: 'UrbanNav_Citywalk'
-  run_name: 'dinov2_2000_hr_jepa'
+  name: 'CityWalker'
+  run_name: 'train_2000hr'
   result_dir: 'results'
 
 training:
   batch_size: 32
-  max_epochs: 8
+  max_epochs: 10
   gpus: 1
   amp: false
   normalize_step_length: true
@@ -15,7 +15,7 @@ training:
 
 scheduler:
   name: 'cosine'
-  step_size: 8
+  step_size: 10
   gamma: 0.1
 
 optimizer:
@@ -23,7 +23,7 @@ optimizer:
   lr: 2e-4
 
 model:
-  type: 'urbannav_jepa'
+  type: 'citywalker_feat'
   do_rgb_normalize: true
   do_resize: true
   obs_encoder:
@@ -49,9 +49,9 @@ model:
     ff_dim_factor: 4
 
 data:
-  type: citywalk_jepa
-  video_dir: '/vast/xl3136/citywalk_2min/videos'
-  pose_dir: '/vast/xl3136/citywalk_2min/poses'
+  type: citywalk_feat
+  video_dir: 'dataset/citywalk_2min/videos'
+  pose_dir: 'dataset/citywalk_2min/poses'
   num_workers: 23
   pose_fps: 5
   video_fps: 30
@@ -65,9 +65,9 @@ data:
   arrived_prob: 0.3
 
 validation:
-  num_visualize: 0
+  num_visualize: 400
 testing:
-  num_visualize: 0
+  num_visualize: 400
 
 logging:
   enable_wandb: true  # Set to false to disable Wandb logging

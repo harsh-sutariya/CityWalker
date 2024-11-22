@@ -5,10 +5,10 @@ import argparse
 import yaml
 import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
-from pl_modules.urbannav_datamodule import UrbanNavDataModule
-from pl_modules.urban_nav_module import UrbanNavModule
-from pl_modules.urbannav_jepa_module import UrbanNavJEPAModule
-from pl_modules.citywalk_jepa_datamodule import CityWalkJEPADataModule
+from pl_modules.teleop_datamodule import TeleopDataModule
+from pl_modules.citywalker_module import CityWalkerModule
+from pl_modules.citywalker_feat_module import CityWalkerFeatModule
+from pl_modules.citywalk_feat_datamodule import CityWalkFeatDataModule
 from pytorch_lightning.strategies import DDPStrategy
 import torch
 import glob
@@ -80,18 +80,18 @@ def main():
     # Initialize the DataModule
     if cfg.data.type == 'citywalk':
         datamodule = CityWalkDataModule(cfg)
-    elif cfg.data.type == 'urbannav':
-        datamodule = UrbanNavDataModule(cfg)
-    elif cfg.data.type == 'citywalk_jepa':
-        datamodule = CityWalkJEPADataModule(cfg)
+    elif cfg.data.type == 'teleop':
+        datamodule = TeleopDataModule(cfg)
+    elif cfg.data.type == 'citywalk_feat':
+        datamodule = CityWalkFeatDataModule(cfg)
     else:
         raise ValueError(f"Invalid dataset: {cfg.data.dataset}")
 
     # Initialize the model
-    if cfg.model.type == 'urbannav':
-        model = UrbanNavModule(cfg)
-    elif cfg.model.type == 'urbannav_jepa':
-        model = UrbanNavJEPAModule(cfg)
+    if cfg.model.type == 'citywalker':
+        model = CityWalkerModule(cfg)
+    elif cfg.model.type == 'citywalker_feat':
+        model = CityWalkerFeatModule(cfg)
     else:
         raise ValueError(f"Invalid model: {cfg.model.type}")
     print(pl.utilities.model_summary.ModelSummary(model, max_depth=2))

@@ -2,17 +2,17 @@ import pytorch_lightning as pl
 import numpy as np
 import torch
 import torch.nn.functional as F
-from model.urban_nav import UrbanNav
+from model.citywalker import CityWalker
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Agg')
 import os
 
-class UrbanNavModule(pl.LightningModule):
+class CityWalkerModule(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.model = UrbanNav(cfg)
+        self.model = CityWalker(cfg)
         self.save_hyperparameters(cfg)
         self.do_normalize = cfg.training.normalize_step_length
         self.datatype = cfg.data.type

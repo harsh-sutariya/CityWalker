@@ -7,7 +7,7 @@ from efficientnet_pytorch import EfficientNet
 from model.model_utils import PolarEmbedding, MultiLayerDecoder, PositionalEncoding
 from torchvision import models
 
-class UrbanNav(nn.Module):
+class CityWalker(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.context_size = cfg.model.obs_encoder.context_size

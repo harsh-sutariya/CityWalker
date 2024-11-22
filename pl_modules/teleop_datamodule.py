@@ -1,11 +1,9 @@
-# data/datamodule.py
-
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-from data.citywalk_dataset import CityWalkSampler
-from data.citywalk_jepa_dataset import CityWalkJEPADataset
+# from data.citywalk_dataset import CityWalkDataset
+from data.teleop_dataset import TeleopDataset
 
-class CityWalkJEPADataModule(pl.LightningDataModule):
+class TeleopDataModule(pl.LightningDataModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
@@ -14,15 +12,15 @@ class CityWalkJEPADataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         if stage == 'fit' or stage is None:
-            self.train_dataset = CityWalkJEPADataset(self.cfg, mode='train')
-            self.val_dataset = CityWalkJEPADataset(self.cfg, mode='val')
+            self.train_dataset = TeleopDataset(self.cfg, mode='train')
+            self.val_dataset = TeleopDataset(self.cfg, mode='val')
 
         if stage == 'test' or stage is None:
-            self.test_dataset = CityWalkJEPADataset(self.cfg, mode='test')
+            self.test_dataset = TeleopDataset(self.cfg, mode='test')
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size,
-                          num_workers=self.num_workers, sampler=CityWalkSampler(self.train_dataset))
+                          num_workers=self.num_workers, shuffle=True)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size,

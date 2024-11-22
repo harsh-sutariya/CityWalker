@@ -93,7 +93,7 @@ class MultiLayerDecoder(nn.Module):
             x = F.relu(x)
         return x
     
-class JEPAPredictor(nn.Module):
+class FeatPredictor(nn.Module):
     def __init__(self, embed_dim=512, seq_len=6, nhead=8, num_layers=8, ff_dim_factor=4):
         super().__init__()
         self.positional_encoding = PositionalEncoding(embed_dim, max_seq_len=seq_len)

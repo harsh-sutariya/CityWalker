@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 import random
 from PIL import Image
 
-class UrbanNavDataset(Dataset):
+class TeleopDataset(Dataset):
     def __init__(self, cfg, mode):
         super().__init__()
         self.cfg = cfg
@@ -23,14 +23,7 @@ class UrbanNavDataset(Dataset):
         self.arrived_threshold = cfg.data.arrived_threshold
         self.arrived_prob = cfg.data.arrived_prob
 
-        # Load pose paths
-        # self.pose_path = [
-        #     os.path.join(self.pose_dir, f)
-        #     for f in sorted(os.listdir(self.pose_dir))
-        #     if f.startswith('match_gps_pose') and f.endswith('.txt')
-        # ]
         pose_files = [
-            # "pose_label_1.txt",
             "pose_label_6.txt",
             "pose_label_7.txt",
             "pose_label_8.txt",
@@ -211,8 +204,6 @@ class UrbanNavDataset(Dataset):
                 input_positions = input_positions @ rot_matrix.T
         elif self.cfg.model.cord_embedding.type == 'input_target':
             input_positions = self.transform_input(input_gps_positions)
-            # print(input_positions.shape)
-            # print(target_transformed.shape)
             input_positions = np.concatenate([input_positions, target_transformed[np.newaxis, :2]], axis=0)
         else:
             raise NotImplementedError(f"Coordinate embedding type {self.cfg.model.cord_embedding.type} not implemented")
@@ -238,10 +229,6 @@ class UrbanNavDataset(Dataset):
             'arrived': arrived,
             'step_scale': step_scale
         }
-        # print("input", input_positions)
-        # print("history", history_positions)
-        # print("wp", waypoints_transformed)
-        # print("target", target_transformed)
 
         if self.mode in ['val', 'test']:
             # For visualization

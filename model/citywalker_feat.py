@@ -4,10 +4,10 @@ import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import torchvision.transforms as transforms
 from efficientnet_pytorch import EfficientNet
-from model.model_utils import PolarEmbedding, JEPAPredictor, PositionalEncoding
+from model.model_utils import PolarEmbedding, FeatPredictor, PositionalEncoding
 from torchvision import models
 
-class UrbanNavJEPA(nn.Module):
+class CityWalkerFeat(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.context_size = cfg.model.obs_encoder.context_size
@@ -52,7 +52,7 @@ class UrbanNavJEPA(nn.Module):
             raise NotImplementedError(f"Coordinate embedding type {self.cord_embedding_type} not implemented")
 
         # Decoder
-        self.predictor = JEPAPredictor(
+        self.predictor = FeatPredictor(
             embed_dim=self.num_obs_features,
             seq_len=self.context_size+1,
             nhead=cfg.model.decoder.num_heads,

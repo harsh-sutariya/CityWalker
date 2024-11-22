@@ -5,9 +5,9 @@ import argparse
 import yaml
 import os
 from pl_modules.citywalk_datamodule import CityWalkDataModule
-from pl_modules.urbannav_datamodule import UrbanNavDataModule
-from pl_modules.urban_nav_module import UrbanNavModule
-from pl_modules.urbannav_jepa_module import UrbanNavJEPAModule
+from pl_modules.teleop_datamodule import TeleopDataModule
+from pl_modules.citywalker_module import CityWalkerModule
+from pl_modules.citywalker_feat_module import CityWalkerFeatModule
 import torch
 
 torch.set_float32_matmul_precision('medium')
@@ -54,15 +54,15 @@ def main():
     if cfg.data.type == 'citywalk':
         datamodule = CityWalkDataModule(cfg)
     elif cfg.data.type == 'urbannav':
-        datamodule = UrbanNavDataModule(cfg)
+        datamodule = TeleopDataModule(cfg)
     else:
         raise ValueError(f"Invalid dataset: {cfg.data.type}")
 
     # Initialize the model
     if cfg.model.type == 'urbannav':
-        model = UrbanNavModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
+        model = CityWalkerModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
     elif cfg.model.type == 'urbannav_jepa':
-        model = UrbanNavJEPAModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
+        model = CityWalkerFeatModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
     else:
         raise ValueError(f"Invalid model: {cfg.model.type}")
     print(f"Loaded model from checkpoint: {args.checkpoint}")

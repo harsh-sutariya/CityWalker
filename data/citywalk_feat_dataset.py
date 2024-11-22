@@ -28,7 +28,7 @@ class CityWalkSampler(Sampler):
     def __len__(self):
         return len(self.indices)
 
-class CityWalkJEPADataset(Dataset):
+class CityWalkFeatDataset(Dataset):
     def __init__(self, cfg, mode):
         super().__init__()
         self.cfg = cfg
