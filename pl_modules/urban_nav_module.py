@@ -143,7 +143,7 @@ class UrbanNavModule(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
-        B, T, _, _, _ = obs.shape
+        B, T, _ = batch['waypoints'].shape
         
         if self.datatype == "citywalk":
             if self.output_coordinate_repr == "euclidean":
@@ -151,11 +151,6 @@ class UrbanNavModule(pl.LightningModule):
                 # Compute L1 loss for waypoints
                 waypoints_target = batch['waypoints']
                 l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean').item()
-            elif self.output_coordinate_repr == "polar":
-                wp_pred, arrive_pred, distance_pred, angle_pred = self(obs, cord)
-                waypoints_target = batch['waypoints']
-                distance_loss, angle_loss, _, _ = self.compute_loss_polar(wp_pred, distance_pred, angle_pred, arrive_pred, batch)
-                
             
             # Compute accuracy for "arrived" prediction
             arrived_target = batch['arrived']
@@ -187,9 +182,6 @@ class UrbanNavModule(pl.LightningModule):
             # Store the metrics
             if self.output_coordinate_repr == "euclidean":
                 self.test_metrics['l1_loss'].append(l1_loss)
-            elif self.output_coordinate_repr == "polar":
-                self.test_metrics['distance_loss'].append(distance_loss)
-                self.test_metrics['angle_loss'].append(angle_loss)
             self.test_metrics['arrived_accuracy'].append(accuracy)
             self.test_metrics['mean_angle'].append(mean_angle)
         elif self.datatype == "urbannav":
@@ -201,7 +193,8 @@ class UrbanNavModule(pl.LightningModule):
             waypoints_target = batch['waypoints']
             waypoints_target *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
             # l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='none')
-            l1_loss = F.mse_loss(wp_pred, waypoints_target, reduction='none') ** 0.5
+            # l1_loss = F.mse_loss(wp_pred, waypoints_target, reduction='none') ** 0.5
+            l1_loss = (wp_pred - waypoints_target).norm(dim=-1)
             
             # Compute accuracy for "arrived" prediction
             arrived_target = batch['arrived']
@@ -495,28 +488,30 @@ class UrbanNavModule(pl.LightningModule):
 
             # Plotting
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+            plt.subplots_adjust(wspace=0.3)
 
             # Left axis: plot the current observation (frame) with arrived info in title
             ax1.imshow(frame)
             ax1.axis('off')
-            ax1.set_title(arrive_title)
+            ax1.set_title(arrive_title, fontsize=20)
 
             # Right axis: plot the coordinates
             ax2.axis('equal')
             ax2.plot(original_input_positions[:, 0], original_input_positions[:, 1],
-                     'o-', label='Original Input Positions', color='blue')
+                     'o-', label='Original Input Positions', color='#5771DB')
             ax2.plot(noisy_input_positions[:, 0], noisy_input_positions[:, 1],
-                     'o-', label='Noisy Input Positions', color='orange')
+                     'o-', label='Noisy Input Positions', color='#DBC257')
             ax2.plot(gt_waypoints[:, 0], gt_waypoints[:, 1],
-                     'x-', label='GT Waypoints', color='green')
+                     'X-', label='GT Waypoints', color='#92DB58')
             ax2.plot(pred_waypoints[:, 0], pred_waypoints[:, 1],
-                     's-', label='Predicted Waypoints', color='red')
+                     's-', label='Predicted Waypoints', color='#DB6057')
             ax2.plot(target_transformed[0], target_transformed[1],
-                     marker='*', markersize=15, label='Target Coordinate', color='purple')
+                     marker='*', markersize=15, label='Target Coordinate', color='#A157DB')
             ax2.legend()
-            ax2.set_title('Coordinates')
-            ax2.set_xlabel('X (step length)')
-            ax2.set_ylabel('Y (step length)')
+            ax2.set_title('Coordinates', fontsize=20)
+            ax2.set_xlabel('X (m)', fontsize=20)
+            ax2.set_ylabel('Y (m)', fontsize=20)
+            ax2.tick_params(axis='both', labelsize=18)
             ax2.grid(True)
 
             # Save the plot

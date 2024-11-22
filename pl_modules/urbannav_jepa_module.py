@@ -6,6 +6,7 @@ from model.urban_nav_jepa import UrbanNavJEPA
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Agg')
+plt.style.use('seaborn-v0_8')
 import os
 
 class UrbanNavJEPAModule(pl.LightningModule):
@@ -462,30 +463,32 @@ class UrbanNavJEPAModule(pl.LightningModule):
             # Visualization title
             arrive_title = f"Arrived GT: {'True' if arrived_target else 'False'}, Pred: {arrived_probs:.2f}"
 
-            # Plotting
+                       # Plotting
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+            plt.subplots_adjust(wspace=0.3)
 
             # Left axis: plot the current observation (frame) with arrived info in title
             ax1.imshow(frame)
             ax1.axis('off')
-            ax1.set_title(arrive_title)
+            ax1.set_title(arrive_title, fontsize=20)
 
             # Right axis: plot the coordinates
             ax2.axis('equal')
             ax2.plot(original_input_positions[:, 0], original_input_positions[:, 1],
-                     'o-', label='Original Input Positions', color='blue')
+                     'o-', label='Original Input Positions', color='#5771DB')
             ax2.plot(noisy_input_positions[:, 0], noisy_input_positions[:, 1],
-                     'o-', label='Noisy Input Positions', color='orange')
+                     'o-', label='Noisy Input Positions', color='#DBC257')
             ax2.plot(gt_waypoints[:, 0], gt_waypoints[:, 1],
-                     'x-', label='GT Waypoints', color='green')
+                     'X-', label='GT Waypoints', color='#92DB58')
             ax2.plot(pred_waypoints[:, 0], pred_waypoints[:, 1],
-                     's-', label='Predicted Waypoints', color='red')
+                     's-', label='Predicted Waypoints', color='#DB6057')
             ax2.plot(target_transformed[0], target_transformed[1],
-                     marker='*', markersize=15, label='Target Coordinate', color='purple')
-            ax2.legend()
-            ax2.set_title('Coordinates')
-            ax2.set_xlabel('X (step length)')
-            ax2.set_ylabel('Y (step length)')
+                     marker='*', markersize=15, label='Target Coordinate', color='#A157DB')
+            # ax2.legend(fontsize=20)
+            ax2.set_title('Coordinates', fontsize=20)
+            ax2.set_xlabel('X (m)', fontsize=20)
+            ax2.set_ylabel('Y (m)', fontsize=20)
+            ax2.tick_params(axis='both', labelsize=18)
             ax2.grid(True)
 
             # Save the plot

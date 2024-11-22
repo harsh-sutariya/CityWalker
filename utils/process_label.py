@@ -69,15 +69,15 @@ def process_pose_files(cfg):
 
     # Load predefined pose files
     pose_files = [
-        "match_gps_ros_pose6.txt",
-        "match_gps_ros_pose7.txt",
-        "match_gps_ros_pose8.txt",
-        "match_gps_ros_pose9.txt",
-        "match_gps_ros_pose11.txt",
-        "match_gps_ros_pose16.txt",
-        "match_gps_ros_pose17.txt",
-        "match_gps_ros_pose18.txt",
-        "match_gps_ros_pose21.txt",
+        "match_gps_ros_pose23.txt",
+        "match_gps_ros_pose24.txt",
+        "match_gps_ros_pose25.txt",
+        "match_gps_ros_pose26.txt",
+        "match_gps_ros_pose27.txt",
+        "match_gps_ros_pose28.txt",
+        "match_gps_ros_pose29.txt",
+        "match_gps_ros_pose31.txt",
+        "match_gps_ros_pose33.txt",
     ]
     pose_paths = [os.path.join(cfg.pose_dir, f) for f in pose_files]
 
@@ -251,7 +251,7 @@ def process_pose_files(cfg):
         # Compute relative positions for each sample
         positions_2d = np.zeros((num_samples, 2))
 
-        for idx in range(num_samples):
+        for idx in range(num_samples-1):
             current_pose_matrix = pose_matrices[idx]
             try:
                 current_pose_inv = np.linalg.inv(current_pose_matrix)
