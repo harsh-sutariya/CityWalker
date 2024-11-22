@@ -19,7 +19,3 @@ dependencies:
       - pytorch-lightning
       - wandb
       - decord
-      - efficientnet-pytorch
-      - diffusers
-      - transformers
-      - einops
