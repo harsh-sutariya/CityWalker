@@ -1,4 +1,4 @@
-name: UrbanNav
+name: citywalker
 channels:
   - nvidia
   - pytorch

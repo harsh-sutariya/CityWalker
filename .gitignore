@@ -1,5 +1,7 @@
 results/
 logs
+dataset/citywalk
+dataset/teleop
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
