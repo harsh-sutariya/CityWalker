@@ -7,7 +7,7 @@
   <meta name="keywords" content="Visual navigation, Embodied navigation, Video Learning">     
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CityWalker</title>
-  <link rel="icon" type="image/png" href="./src/favicon.png">
+  <link rel="icon" type="image/png" href="./src/ai4ce.png">
 
   <!-- Global site tag (gtag.js) - Google Analytics -->
   <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
@@ -109,7 +109,7 @@
     <div class="container is-max-desktop">
       <div class="columns is-centered">
         <div class="column has-text-centered">
-          <img src="./src/favicon.png" alt="CityWalker Icon" style="vertical-align: middle; height: 10em; margin-right: 0.1em;">
+          <img src="./static/images/logo.png" alt="CityWalker Icon" style="vertical-align: middle; height: 10em; margin-right: 0.1em;">
           <h1 class="title is-2 publication-title">
               CityWalker: Learning Embodied Urban Navigation from Web-Scale Videos
           </h1>
@@ -210,6 +210,149 @@
 
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Teaser. -->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full-width teaser no-margin">
+
+        <h2 class="title is-3">TLDR</h2>
+        <p style="font-size: 20px; background-color: #8b00e13b;">
+          We leverage thousands of hours of online city walking and driving videos to train autonomous agents for robust,
+          generalizable navigation in urban environments through scalable, data-driven imitation learning.
+        </p>
+        <br>
+        <video muted autoplay loop controls controls id="videoPlayer">
+          <source src="./static/videos/CityWalker_demo_anonymous.mp4" type="video/mp4">
+        </video>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- Abstract. -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered ">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Navigating dynamic urban environments presents significant challenges for embodied agents, requiring advanced spatial
+            reasoning and adherence to common-sense norms. Despite progress, existing visual navigation methods struggle in map-free
+            or off-street settings, limiting the deployment of autonomous agents like last-mile delivery robots. To overcome these
+            obstacles, we propose a scalable, data-driven approach for <b>human-like urban navigation</b> by training agents on thousands
+            of hours of in-the-wild city walking and driving videos sourced from the web. We introduce a simple and scalable data
+            processing pipeline that extracts action supervision from these videos, enabling large-scale imitation learning without
+            costly annotations. Our model learns sophisticated navigation policies to handle diverse challenges and critical
+            scenarios. Experimental results show that training on large-scale, diverse datasets significantly enhances navigation
+            performance, surpassing current methods. This work shows the potential of using abundant online video data to develop
+            robust navigation policies for embodied agents in dynamic urban settings.
+          </p>
+        </div>
+        <div class="content has-text-centered">
+          <img src="./static/images/1teasing.gif" alt="CityWalker Teasing" style="height: 20em;">
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- Method -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered ">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered">Method</h2>
+        <center>
+          <!-- This image is always visible  -->
+          <div id="overview">
+            <img src="./static/images/2pipeline.png" style="width: 45vw; min-width: 330px;" alt="Pipeline">
+          </div>
+
+          <div class="content has-text-justified">
+            <p id="text-content"> <b>Overall Pipeline of CityWalker</b>.
+            Our training pipeline starts with internet-sourced videos, using visual odometry to obtain
+            relative poses between frames. At each time step, the model receives past observations, past trajectory, and target
+            location as input. They
+            are encoded via a frozen image encoder and a trainable coordinate encoder. A transformer processes these inputs to
+            generate future tokens.
+            An action head and an arrival head decode these tokens into action and arrival status predictions. During training,
+            future frame tokens from
+            future frames guide the transformer to hallucinate future tokens.
+            </p>
+          </div>
+        </center>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- Results -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered ">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered">Experiment Results</h2>
+        <center>
+          <!-- This image is always visible  -->
+          <div id="overview">
+            <img src="./static/images/8scale.png" style="width: 45vw; min-width: 330px;" alt="Scaling Results">
+          </div>
+
+          <div class="content has-text-justified">
+            <p id="text-content"> <b>Performance and Data Scale</b>.
+              We show the model
+              performance evaluated by MAOE with respect to the size of the
+              training data measured by video length in hours. We also show
+              the zero-shot performance of our model trained with only driving
+              videos and mixed driving and walking videos
+            </p>
+          </div>
+        </center>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- Visualization -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered ">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered">Qualitative Results</h2>
+        <center>
+          <!-- This image is always visible  -->
+          <div id="overview">
+            <img src="./static/images/11more_qual.png" style="width: 45vw; min-width: 330px;" alt="Qualitative Results">
+          </div>
+
+          <div class="content has-text-justified">
+            <p id="text-content"> <b>Qualitative Results</b>.
+              We divide the results into three categories. Success: predicted action aligns well with ground truth action.
+              Large error: predicted action does not align with ground
+              truth but may still lead to successful navigation. Fail: predicted action may lead to failed navigation. The most
+              significant observation is that large errors in offline data do not
+              necessarily lead to failure in navigation, due to the multimodality characteristic of policy learning. For example, in
+              the fifth row, although the ground truth action takes a detour to the right of the traffic drum, the predicted action
+              that
+              goes straight from the left of the drum should also lead to
+              successful navigation.
+            </p>
+          </div>
+        </center>
       </div>
     </div>
   </div>
