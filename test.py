@@ -75,7 +75,7 @@ def main():
     # Initialize the DataModule
     if cfg.data.type == 'citywalk':
         datamodule = CityWalkDataModule(cfg)
-    elif cfg.data.type == 'urbannav':
+    elif cfg.data.type == 'teleop':
         datamodule = TeleopDataModule(cfg)
     else:
         raise ValueError(f"Invalid dataset: {cfg.data.dataset}")
@@ -94,9 +94,9 @@ def main():
         print(f"No checkpoint specified. Using the latest checkpoint: {checkpoint_path}")
 
     # Load the model from the checkpoint
-    if cfg.model.type == 'urbannav':
+    if cfg.model.type == 'citywalker':
         model = CityWalkerModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
-    elif cfg.model.type == 'urbannav_jepa':
+    elif cfg.model.type == 'citywalker_feat':
         model = CityWalkerFeatModule.load_from_checkpoint(checkpoint_path, cfg=cfg)
     else:
         raise ValueError(f"Invalid model: {cfg.model.type}")

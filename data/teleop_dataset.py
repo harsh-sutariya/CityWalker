@@ -24,24 +24,24 @@ class TeleopDataset(Dataset):
         self.arrived_prob = cfg.data.arrived_prob
 
         pose_files = [
-            "pose_label_6.txt",
-            "pose_label_7.txt",
-            "pose_label_8.txt",
-            "pose_label_9.txt",
-            "pose_label_11.txt",
-            "pose_label_16.txt",
-            "pose_label_17.txt",
-            "pose_label_18.txt",
-            "pose_label_21.txt",
-            "pose_label_23.txt",
-            "pose_label_24.txt",
-            "pose_label_25.txt",
-            "pose_label_26.txt",
-            "pose_label_27.txt",
-            "pose_label_28.txt",
-            "pose_label_29.txt",
-            "pose_label_31.txt",
-            "pose_label_33.txt",
+            "pose_traj_01.txt",
+            "pose_traj_02.txt",
+            "pose_traj_03.txt",
+            "pose_traj_04.txt",
+            "pose_traj_05.txt",
+            "pose_traj_06.txt",
+            "pose_traj_07.txt",
+            "pose_traj_08.txt",
+            "pose_traj_09.txt",
+            "pose_traj_10.txt",
+            "pose_traj_11.txt",
+            "pose_traj_12.txt",
+            "pose_traj_13.txt",
+            "pose_traj_14.txt",
+            "pose_traj_15.txt",
+            "pose_traj_16.txt",
+            "pose_traj_17.txt",
+            "pose_traj_18.txt",
         ]
         self.pose_path = [os.path.join(self.pose_dir, f) for f in pose_files]
 
@@ -64,7 +64,7 @@ class TeleopDataset(Dataset):
 
         for f in tqdm(self.pose_path, desc="Loading data"):
             seq_idx = ''.join(filter(str.isdigit, os.path.basename(f)))
-            image_folder = os.path.join(self.image_root_dir, f'dog_nav_undistort_{seq_idx}')
+            image_folder = os.path.join(self.image_root_dir, f'traj_{seq_idx}')
             if not os.path.exists(image_folder):
                 raise FileNotFoundError(f"Image folder {image_folder} does not exist.")
             self.image_folders.append(image_folder)
