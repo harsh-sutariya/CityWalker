@@ -2,7 +2,7 @@
 
 ### TL;DR: CityWalker leverages thousands of hours of online city walking and driving videos to train autonomous agents for robust, generalizable navigation in dynamic urban environments through scalable, data-driven imitation learning.
 
-<a href='src/CityWalker.pdf'><img src='https://img.shields.io/badge/Paper-arXiv-red'></a> <a href='https://ai4ce.github.io/CityWalker/'><img src='https://img.shields.io/badge/Project-hompage-green'></a> <a href='https://huggingface.co/datasets/ai4ce/CityWalker'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-blue'></a>
+<a href='https://ai4ce.github.io/CityWalker/src/CityWalker.pdf'><img src='https://img.shields.io/badge/Paper-arXiv-red'></a> <a href='https://ai4ce.github.io/CityWalker/'><img src='https://img.shields.io/badge/Project-hompage-green'></a> <a href='https://huggingface.co/datasets/ai4ce/CityWalker'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-blue'></a>
 
 [Xinhao Liu](https://gaaaavin.github.io/)\*,
 [Jintong Li](.)\*, 
