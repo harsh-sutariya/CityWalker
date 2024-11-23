@@ -32,6 +32,7 @@ To train the model, run:
 ```
 python train.py --config configs/citywalk_2000hr.yaml
 ```
+We provide our **pretrained model** in the [releases tab](https://github.com/ai4ce/CityWalker/releases).
 
 ## Fine-tuning
 To fine-tune the model, run:
@@ -40,7 +41,6 @@ python fine_tune.py --config configs/citywalk_2000hr.yaml --checkpoint <path_to_
 ```
 
 ## Testing
-We provide our pretrained model on our [Hugging Face page](https://huggingface.co/ai4ce/CityWalker).
 To test the model, run:
 ```
 python test.py --config configs/citywalk_2000hr.yaml --checkpoint <path_to_checkpoint>
