@@ -16,6 +16,12 @@
 
 ![](./src/nav.gif)
 
+**Checkout a mosaic demo of our dataset:**
+
+https://github.com/user-attachments/assets/02f57a2b-f2d2-4638-a8b0-d837d219735f
+
+
+
 # Getting Started
 ## Installation
 The project should be compatible with latest Pytorch and CUDA versions. The code is tested with Python 3.11, PyTorch 2.5.0, and CUDA 12.1. To install the dependencies, run:
