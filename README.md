@@ -68,3 +68,11 @@ The work was supported by NSF grants 2238968, 2121391, 2322242 and 2345139; and 
 We also thank the authors of the following repositories for their open-source implementations:
 * [ViNT: A Foundation Model for Visual Navigation](https://github.com/robodhruv/visualnav-transformer), CoRL 2023
 * [NoMaD: Goal Masked Diffusion Policies for Navigation and Exploration](https://github.com/robodhruv/visualnav-transformer), ICRA 2024
+
+<a href="https://star-history.com/#ai4ce/citywalker&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ai4ce/citywalker&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ai4ce/citywalker&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ai4ce/citywalker&type=Date" />
+ </picture>
+</a>
