@@ -1,4 +1,4 @@
-# CityWalker: Learning Embodied Urban Navigation from Web-Scale Videos
+# [CVPR 2025] CityWalker: Learning Embodied Urban Navigation from Web-Scale Videos
 
 ### TL;DR: CityWalker leverages thousands of hours of online city walking and driving videos to train autonomous agents for robust, generalizable navigation in dynamic urban environments through scalable, data-driven imitation learning.
 
