@@ -4,7 +4,7 @@
 In our data processing pipeline, we first divide the long videos into short clips of two minutes to reduce IO bottleneck during training. We then use [DPVO](https://github.com/princeton-vl/DPVO) to get the odometry in each clip. Therefore we cannot provide the trajectory for each video. We only provide the playlists of the videos we used and our processing pipeline.
 
 ### Download
-Please download the videos in `citywalk_playlists.txt` and/or `citydrive_playlists.txt`(optional). And put them in a single directory.
+Please download the videos in `citywalk_playlists.txt` and/or `citydrive_playlists.txt`(optional). And put them in a single directory. We recommend using [youtube-dl](https://github.com/ytdl-org/ytdl-nightly) to download.
 
 ### Preprocessing
 #### 1. Split the videos
