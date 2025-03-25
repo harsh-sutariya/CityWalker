@@ -41,7 +41,7 @@ class CityWalkerFeatModule(pl.LightningModule):
         self.image_mean = np.array([0.485, 0.456, 0.406])
         self.image_std = np.array([0.229, 0.224, 0.225])
 
-        if self.datatype == "urbannav":
+        if self.datatype == "teleop":
             self.test_catetories = ['crowd', 'person_close_by', 'turn', 'action_target_mismatch', 'crossing', 'other']
             self.num_categories = len(self.test_catetories)
 
@@ -158,7 +158,7 @@ class CityWalkerFeatModule(pl.LightningModule):
                 self.test_metrics['l1_loss'].append(l1_loss)
             self.test_metrics['arrived_accuracy'].append(accuracy)
             self.test_metrics['mean_angle'].append(mean_angle)
-        elif self.datatype == "urbannav":
+        elif self.datatype == "teleop":
             category = batch['categories']
             wp_pred, arrive_pred, _, _ = self(obs, cord, future_obs)
             wp_pred *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
@@ -247,7 +247,7 @@ class CityWalkerFeatModule(pl.LightningModule):
                     mean_angle = metric_array.mean(axis=0)
                     for i in range(len(mean_angle)):
                         print(f"Test mean angle at step {i} {mean_angle[i]:.4f}")
-        elif self.datatype == "urbannav":
+        elif self.datatype == "teleop":
             import pandas as pd
             for category in self.test_catetories:
                 # Add a new 'count' metric for each category by counting 'l1_loss' entries
@@ -287,7 +287,7 @@ class CityWalkerFeatModule(pl.LightningModule):
                 self.test_metrics = {'l1_loss': [], 'arrived_accuracy': [], 'mean_angle': []}
             elif self.output_coordinate_repr == "polar":
                 self.test_metrics = {'distance_loss': [], 'angle_loss': [], 'arrived_accuracy': [], 'mean_angle': []}
-        elif self.datatype == "urbannav":
+        elif self.datatype == "teleop":
             self.test_metrics = {}
             categories = self.test_catetories[:]
             categories.extend(['mean', 'overall'])
@@ -304,7 +304,7 @@ class CityWalkerFeatModule(pl.LightningModule):
                         'mean_angle': []
                     }
                 elif self.output_coordinate_repr == "polar":
-                    raise ValueError("Polar representation is not supported for UrbanNav dataset.")
+                    raise ValueError("Polar representation is not supported for teleop dataset.")
 
     def compute_loss(self, wp_pred, arrive_pred, feature_pred, feature_gt, batch):
         waypoints_target = batch['waypoints']
