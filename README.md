@@ -43,13 +43,13 @@ We provide our **pretrained model** in the [releases tab](https://github.com/ai4
 ## Fine-tuning
 To fine-tune the model, run:
 ```
-python fine_tune.py --config configs/finetune.yaml --checkpoint <path_to_checkpoint>
+python fine_tune.py --config config/finetune.yaml --checkpoint <path_to_checkpoint>
 ```
 
 ## Testing
 To test the model, run:
 ```
-python test.py --config configs/finetune.yaml --checkpoint <path_to_checkpoint>
+python test.py --config config/finetune.yaml --checkpoint <path_to_checkpoint>
 ```
 
 # Citation
