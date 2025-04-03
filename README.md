@@ -36,7 +36,7 @@ Please see [dataset/README.md](./dataset/README.md) for details on how to prepar
 ## Training
 To train the model, run:
 ```
-python train.py --config configs/citywalk_2000hr.yaml
+python train.py --config config/citywalk_2000hr.yaml
 ```
 We provide our **pretrained model** in the [releases tab](https://github.com/ai4ce/CityWalker/releases).
 
