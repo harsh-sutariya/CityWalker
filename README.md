@@ -54,11 +54,12 @@ python test.py --config config/finetune.yaml --checkpoint <path_to_checkpoint>
 
 # Citation
 ```
-@article{liu2024citywalker,
-  title={CityWalker: Learning Embodied Urban Navigation from Web-Scale Videos},
+@inproceedings{liu2025citywalker,
+  title={Citywalker: Learning embodied urban navigation from web-scale videos},
   author={Liu, Xinhao and Li, Jintong and Jiang, Yicheng and Sujay, Niranjan and Yang, Zhicheng and Zhang, Juexiao and Abanes, John and Zhang, Jing and Feng, Chen},
-  journal={arXiv preprint arXiv:2411.17820},
-  year={2024}
+  booktitle={Proceedings of the Computer Vision and Pattern Recognition Conference},
+  pages={6875--6885},
+  year={2025}
 }
 ```
 
@@ -68,6 +69,13 @@ The work was supported by NSF grants 2238968, 2121391, 2322242 and 2345139; and 
 We also thank the authors of the following repositories for their open-source implementations:
 * [ViNT: A Foundation Model for Visual Navigation](https://github.com/robodhruv/visualnav-transformer), CoRL 2023
 * [NoMaD: Goal Masked Diffusion Policies for Navigation and Exploration](https://github.com/robodhruv/visualnav-transformer), ICRA 2024
+
+# Relevant work
+Here is a list for highly relevant work for interested readers:
+* [MetaUrban: An Embodied AI Simulation Platform for Urban Micromobility](https://metadriverse.github.io/metaurban/), ICLR 2025
+* [NaVILA: Legged Robot Vision-Language-Action Model for Navigation](https://navila-bot.github.io/), RSS 2025
+* [Learning to Drive Anyware with Model-Based Reannotation](https://model-base-reannotation.github.io/), arXiv 2025
+* [From Seeing to Experiencing: Scaling Navigation Foundation Models with Reinforcement Learning](https://metadriverse.github.io/s2e/), arXiv 2025
 
 <a href="https://star-history.com/#ai4ce/citywalker&Date">
  <picture>
