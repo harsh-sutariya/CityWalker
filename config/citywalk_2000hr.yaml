@@ -4,10 +4,10 @@ project:
   result_dir: 'results'
 
 training:
-  batch_size: 32
+  batch_size: 8
   max_epochs: 10
-  gpus: 1
-  amp: false
+  gpus: 4
+  amp: true  
   normalize_step_length: true
   resume: false
   direction_loss_weight: 5.0
