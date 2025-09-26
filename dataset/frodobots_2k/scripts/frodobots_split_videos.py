@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Frodobots 2K Dataset Video Splitter (Space-Efficient Version)
+Frodobots 2K Dataset Video Splitter (Race-Condition Free Version)
 This script splits the converted MP4 videos from the Frodobots dataset into 2-minute segments,
 similar to the CityWalk video processing pipeline.
 
@@ -9,7 +9,8 @@ Key Features:
 - Verifies all segments were created successfully
 - Automatically deletes original videos after successful verification 
 - Space-efficient processing to avoid storage issues
-- Parallel processing support via SLURM array jobs
+- Race-condition free parallel processing via static video lists
+- Backward compatible with dynamic scanning mode
 """
 
 import os
@@ -159,6 +160,32 @@ def find_converted_videos(base_path):
     
     return video_files
 
+def load_video_list(video_list_file):
+    """
+    Load the pre-generated list of videos to process (race-condition free).
+    
+    Args:
+        video_list_file (str): Path to file containing video paths
+        
+    Returns:
+        list: List of video file paths
+    """
+    try:
+        with open(video_list_file, 'r') as f:
+            video_files = [line.strip() for line in f if line.strip()]
+        
+        # Filter out videos that no longer exist (might have been processed by other means)
+        existing_videos = []
+        for video_path in video_files:
+            if Path(video_path).exists():
+                existing_videos.append(video_path)
+        
+        return existing_videos
+    except FileNotFoundError:
+        print(f"❌ Video list file not found: {video_list_file}")
+        print("💡 Run generate_video_list.py first to create the video list")
+        return []
+
 def split_video_completely(video_path, output_dir, base_name):
     """
     Split a complete video into all its segments.
@@ -225,24 +252,37 @@ def split_video_completely(video_path, output_dir, base_name):
     
     return True, segment_paths, f"Successfully created {num_segments} segments"
 
-def process_frodobots_videos(base_path, task_id=0, num_tasks=1):
+def process_frodobots_videos(base_path, task_id=0, num_tasks=1, video_list_file=None):
     """
     Process converted MP4 videos for splitting into segments with space-efficient cleanup.
     
     Args:
-        base_path (str): Base path to the extracted dataset
+        base_path (str): Base path to the extracted dataset (used if video_list_file is None)
         task_id (int): Current task ID for parallel processing
         num_tasks (int): Total number of tasks
+        video_list_file (str): Path to static video list file (race-condition free mode)
     """
-    print(f"🔍 Scanning for converted MP4 files in {base_path}...")
-    video_files = find_converted_videos(base_path)
-    
-    if not video_files:
-        print("❌ No converted MP4 video files found!")
-        print("💡 Hint: Run the HLS to MP4 conversion script first")
-        return
-    
-    print(f"📹 Found {len(video_files)} converted MP4 videos")
+    if video_list_file:
+        # Race-condition free mode: use static video list
+        print(f"📖 Loading video list from {video_list_file}...")
+        video_files = load_video_list(video_list_file)
+        
+        if not video_files:
+            print("❌ No videos found in the list!")
+            return
+        
+        print(f"📹 Loaded {len(video_files)} videos from list")
+    else:
+        # Legacy mode: dynamic scanning (may have race conditions)
+        print(f"🔍 Scanning for converted MP4 files in {base_path}...")
+        video_files = find_converted_videos(base_path)
+        
+        if not video_files:
+            print("❌ No converted MP4 video files found!")
+            print("💡 Hint: Run the HLS to MP4 conversion script first")
+            return
+        
+        print(f"📹 Found {len(video_files)} converted MP4 videos")
     
     # Distribute videos among tasks (not segments)
     total_videos = len(video_files)
@@ -276,6 +316,12 @@ def process_frodobots_videos(base_path, task_id=0, num_tasks=1):
         for video_path_str in task_videos:
             video_path = Path(video_path_str)
             pbar.set_description(f"Task {task_id}: {video_path.name}")
+            
+            # Skip if video no longer exists (might have been processed already)
+            if not video_path.exists():
+                print(f"  ⚠️  Video no longer exists: {video_path.name}")
+                pbar.update(1)
+                continue
             
             # Create output directory for this video's segments
             # Structure: part_X/output_rides_X/ride_X/recordings_converted_2min/
@@ -334,7 +380,9 @@ def main():
     parser = argparse.ArgumentParser(description="Split Frodobots converted videos into 2-minute segments")
     parser.add_argument('--base-path', type=str, 
                        default="/vast/hs5580/data/frodobots_2k/extracted",
-                       help="Base path to extracted Frodobots dataset")
+                       help="Base path to extracted Frodobots dataset (used if --video-list not provided)")
+    parser.add_argument('--video-list', type=str, default=None,
+                       help="Path to static video list file (race-condition free mode)")
     parser.add_argument('--task-id', type=int, default=None,
                        help="Task ID for parallel processing")
     parser.add_argument('--num-tasks', type=int, default=None,
@@ -355,14 +403,19 @@ def main():
     task_min = int(os.environ.get('SLURM_ARRAY_TASK_MIN', '0'))
     task_id = task_id - task_min
     
-    print("🤖 Frodobots Video Splitter")
+    print("🤖 Frodobots Video Splitter (Race-Condition Free)")
     print("=" * 50)
-    print(f"Base Path: {args.base_path}")
+    if args.video_list:
+        print(f"Video List: {args.video_list}")
+        print("Mode: Race-condition free (static list)")
+    else:
+        print(f"Base Path: {args.base_path}")
+        print("Mode: Legacy (dynamic scanning - may have race conditions)")
     print(f"Segment Duration: {SEGMENT_DURATION} seconds")
     print(f"Task: {task_id + 1}/{num_tasks}")
     print("=" * 50)
     
-    process_frodobots_videos(args.base_path, task_id, num_tasks)
+    process_frodobots_videos(args.base_path, task_id, num_tasks, args.video_list)
 
 if __name__ == "__main__":
     main()

@@ -55,9 +55,10 @@ sbatch split_frodobots_videos.slurm
 ## Dataset Information
 
 - **Total Size**: ~1TB after processing
-- **Format**: MP4 video segments (2 minutes each)
+- **Video Segments**: 51,100 total (2 minutes each)
+- **Format**: MP4 video segments
 - **Structure**: Organized by ride sessions with sensor data
-- **Cameras**: Front and rear camera streams
+- **Cameras**: Front and rear camera streams (separate processing)
 - **Additional Data**: GPS, IMU, control data, audio timestamps
 
 ## Features

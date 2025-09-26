@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=16                  # Number of CPU cores per task
 #SBATCH --mem=8G                          # Total memory
 #SBATCH --time=6:00:00                    # Time limit hrs:min:sec (increased for large dataset)
-#SBATCH --array=0-499                       # Array range for 17,098+ videos (500 tasks)
+#SBATCH --array=0-99                        # Array range (adjust based on remaining videos)
 
 echo "Job ID: $SLURM_JOB_ID"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
@@ -21,10 +21,12 @@ OS_IMAGE=/scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.0
 
 # Define paths
 BASE_PATH="/vast/hs5580/data/frodobots_2k/extracted"
+VIDEO_LIST="/scratch/hs5580/citywalker/remaining_videos.txt"
 
-echo "Starting space-efficient video splitting for Frodobots dataset"
+echo "Starting race-condition-free video splitting for Frodobots dataset"
 echo "Base path: ${BASE_PATH}"
-echo "Mode: Split videos, verify segments, delete originals to save space"
+echo "Video list: ${VIDEO_LIST}"
+echo "Mode: Race-condition free parallel processing"
 
 # Create temporary overlay
 singularity overlay create --size 1024 $TEMP_OVERLAY
@@ -41,10 +43,10 @@ singularity exec \
         conda activate citywalker
         cd $SCRIPTS_DIR
         
-        echo 'Splitting Frodobots videos into 2-minute segments (space-efficient mode)...'
-        python frodobots_split_videos.py --base-path ${BASE_PATH}
+        echo 'Processing remaining videos using race-condition-free approach...'
+        python frodobots_split_videos.py --video-list ${VIDEO_LIST}
         
-        echo 'Space-efficient video splitting completed'
+        echo 'Race-condition-free video splitting completed'
         "
 
 # Clean up
