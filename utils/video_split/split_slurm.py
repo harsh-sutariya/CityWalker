@@ -5,8 +5,8 @@ import argparse
 from tqdm import tqdm
 
 # Configuration
-INPUT_DIR = "dataset/citywalk/videos"               # Directory containing original videos
-OUTPUT_DIR = "dataset/citywalk_2min"     # Directory to save split segments
+INPUT_DIR = "/vast/hs5580/data/citywalker/videos"               # Directory containing original videos
+OUTPUT_DIR = "/vast/hs5580/data/citywalker/citywalk_2min"     # Directory to save split segments
 SEGMENT_DURATION = 120                                      # Duration of each segment in seconds (10 minutes)
 
 def ensure_directories():
