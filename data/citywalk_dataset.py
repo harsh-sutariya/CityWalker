@@ -75,7 +75,11 @@ class CityWalkDataset(Dataset):
         self.poses = []
         self.count = []
         for f in tqdm(self.pose_path, desc="Loading poses"):
-            pose = np.loadtxt(f)[::max(1, self.pose_fps // self.target_fps), 1:]
+            pose_data = np.loadtxt(f)
+            # Handle 1D arrays (single line files) by reshaping to 2D
+            if pose_data.ndim == 1:
+                pose_data = pose_data.reshape(1, -1)
+            pose = pose_data[::max(1, self.pose_fps // self.target_fps), 1:]
             pose_nan = np.isnan(pose).any(axis=1)
             if np.any(pose_nan):
                 first_nan_idx = np.argmin(pose_nan)
