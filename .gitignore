@@ -2,6 +2,11 @@ results/
 logs
 dataset/citywalk
 dataset/teleop
+# Exclude large dataset files but keep scripts and docs
+dataset/frodobots_2k/videos/
+dataset/frodobots_2k/poses/
+dataset/citywalk_2min/videos/
+dataset/citywalk_2min/poses/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
