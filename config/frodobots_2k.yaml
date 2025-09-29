@@ -56,8 +56,8 @@ data:
   pose_fps: 1
   video_fps: 30
   target_fps: 1
-  num_train: 39582  # Using full dataset minus validation samples (40582 - 1000)
-  num_val: 1000     # Using 1000 validation samples
+  num_train: 100000  #(400 - 5 - 5) ÷ 5 = 77 samples per video 
+  num_val: 1000        # Using 1000 validation samples
   num_test: 0
   input_noise: 0.1 # sigma (after normalization)
   search_window: 50 # frames
