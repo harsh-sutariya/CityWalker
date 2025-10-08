@@ -33,7 +33,17 @@ from model.depth_teacher import load_depth_teacher, precompute_depth_for_video
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Precompute depth maps for CityWalker training')
-    parser.add_argument('--config', type=str, required=True, help='Path to config file')
+    
+    # Option 1: Use config file
+    parser.add_argument('--config', type=str, help='Path to config file (alternative to specifying dirs directly)')
+    
+    # Option 2: Specify directories directly (simpler for depth-only preprocessing)
+    parser.add_argument('--video_dir', type=str, help='Directory containing input videos')
+    parser.add_argument('--depth_dir', type=str, help='Directory to save depth maps')
+    parser.add_argument('--video_fps', type=int, default=30, help='Original video FPS')
+    parser.add_argument('--target_fps', type=int, default=1, help='Target FPS for depth extraction')
+    
+    # Depth model arguments
     parser.add_argument('--checkpoint', type=str, required=True, help='Path to depth model checkpoint')
     parser.add_argument('--model_size', type=str, default='small', choices=['small', 'base', 'large'],
                        help='Depth model size')
@@ -54,15 +64,28 @@ def load_config(config_path):
 def main():
     args = parse_args()
     
-    # Load config
-    print(f"Loading config from {args.config}")
-    cfg = load_config(args.config)
-    
-    # Get data directories
-    video_dir = cfg['data']['video_dir']
-    depth_dir = cfg['data']['depth_dir']
-    video_fps = cfg['data']['video_fps']
-    target_fps = cfg['data']['target_fps']
+    # Get data directories - either from config or command line
+    if args.config:
+        # Option 1: Load from config file
+        print(f"Loading config from {args.config}")
+        cfg = load_config(args.config)
+        video_dir = cfg['data']['video_dir']
+        depth_dir = cfg['data']['depth_dir']
+        video_fps = cfg['data']['video_fps']
+        target_fps = cfg['data']['target_fps']
+    elif args.video_dir and args.depth_dir:
+        # Option 2: Use directly specified directories (simpler!)
+        video_dir = args.video_dir
+        depth_dir = args.depth_dir
+        video_fps = args.video_fps
+        target_fps = args.target_fps
+        print(f"Using directly specified directories:")
+        print(f"  Video dir: {video_dir}")
+        print(f"  Depth dir: {depth_dir}")
+        print(f"  Video FPS: {video_fps}, Target FPS: {target_fps}")
+    else:
+        print("Error: Must specify either --config OR both --video_dir and --depth_dir")
+        return
     
     # Create depth directory
     os.makedirs(depth_dir, exist_ok=True)
