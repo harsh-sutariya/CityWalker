@@ -7,6 +7,11 @@ dataset/frodobots_2k/videos/
 dataset/frodobots_2k/poses/
 dataset/citywalk_2min/videos/
 dataset/citywalk_2min/poses/
+dataset/citywalk_2min/depths/
+
+# Depth model checkpoints (large files)
+thirdparty/Depth-Anything-V2/metric_depth/checkpoints/*.pth
+thirdparty/Depth-Anything-V2/metric_depth/checkpoints/*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
