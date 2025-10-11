@@ -29,6 +29,9 @@ class CityWalkerModule(pl.LightningModule):
         # Direction loss weight (you can adjust this value in your cfg)
         self.direction_loss_weight = cfg.training.direction_loss_weight
         
+        # DBR (Depth Barrier Regularization) support
+        self.use_dbr = getattr(cfg.model, 'use_dbr', False)
+        
         # Visualization settings
         self.val_num_visualize = cfg.validation.num_visualize
         self.test_num_visualize = cfg.testing.num_visualize
@@ -48,24 +51,41 @@ class CityWalkerModule(pl.LightningModule):
             self.test_catetories = ['crowd', 'person_close_by', 'turn', 'action_target_mismatch', 'crossing', 'other']
             self.num_categories = len(self.test_catetories)
 
-    def forward(self, obs, cord, gt_action=None):
-        return self.model(obs, cord, gt_action)
+    def forward(self, obs, cord, gt_action=None, depth_map=None, depth_mask=None):
+        return self.model(obs, cord, gt_action, depth_map, depth_mask)
     
     def training_step(self, batch, batch_idx):
         obs = batch['video_frames']
         cord = batch['input_positions']
         
+        # Extract depth data if DBR is enabled
+        depth_map = batch.get('depth_map', None) if self.use_dbr else None
+        depth_mask = batch.get('depth_mask', None) if self.use_dbr else None
+        
         if self.decoder == "attention":
             if self.output_coordinate_repr == "euclidean":
-                wp_pred, arrive_pred = self(obs, cord)
+                wp_pred, arrive_pred = self(obs, cord, depth_map=depth_map, depth_mask=depth_mask)
                 losses = self.compute_loss(wp_pred, arrive_pred, batch)
                 waypoints_loss = losses['waypoints_loss']
                 arrived_loss = losses['arrived_loss']
                 direction_loss = losses['direction_loss']
                 total_loss = waypoints_loss + arrived_loss + self.direction_loss_weight * direction_loss
+                
+                # Add DBR loss if enabled
+                if self.use_dbr and depth_map is not None:
+                    # Scale waypoints back to metric space for DBR
+                    step_scale = batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
+                    wp_pred_metric = wp_pred * step_scale
+                    dbr_loss, clearance_vector = self.model.dbr_module(wp_pred_metric, depth_map, depth_mask)
+                    total_loss = total_loss + dbr_loss
+                    self.log('train/l_dbr', dbr_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+                    # Log average clearance for monitoring
+                    avg_clearance = clearance_vector.mean()
+                    self.log('train/avg_clearance', avg_clearance, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+                
                 self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
             elif self.output_coordinate_repr == "polar":
-                wp_pred_euclidean, arrive_pred, distance_pred, angle_pred = self(obs, cord)
+                wp_pred_euclidean, arrive_pred, distance_pred, angle_pred = self(obs, cord, depth_map=depth_map, depth_mask=depth_mask)
                 losses = self.compute_loss_polar(wp_pred_euclidean, distance_pred, angle_pred, arrive_pred, batch)
                 distance_loss = losses['distance_loss']
                 angle_loss = losses['angle_loss']
@@ -75,15 +95,37 @@ class CityWalkerModule(pl.LightningModule):
                             self.angle_loss_weight * angle_loss +
                             arrived_loss +
                             self.direction_loss_weight * direction_loss)
+                
+                # Add DBR loss if enabled
+                if self.use_dbr and depth_map is not None:
+                    step_scale = batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
+                    wp_pred_metric = wp_pred_euclidean * step_scale
+                    dbr_loss, clearance_vector = self.model.dbr_module(wp_pred_metric, depth_map, depth_mask)
+                    total_loss = total_loss + dbr_loss
+                    self.log('train/l_dbr', dbr_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+                    avg_clearance = clearance_vector.mean()
+                    self.log('train/avg_clearance', avg_clearance, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+                
                 self.log('train/l_distance', distance_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
                 self.log('train/l_angle', angle_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         elif self.decoder == "diff_policy":
-            wp_pred, noise_pred, arrived_pred, noise = self(obs, cord, batch['waypoints'])
+            wp_pred, noise_pred, arrived_pred, noise = self(obs, cord, batch['waypoints'], depth_map=depth_map, depth_mask=depth_mask)
             losses = self.compute_loss_diff_policy(wp_pred, noise_pred, arrived_pred, noise, batch)
             noise_loss = losses['noise_loss']
             arrived_loss = losses['arrived_loss']
             direction_loss = losses['direction_loss']
             total_loss = noise_loss + arrived_loss + self.direction_loss_weight * direction_loss
+            
+            # Add DBR loss if enabled
+            if self.use_dbr and depth_map is not None:
+                step_scale = batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
+                wp_pred_metric = wp_pred * step_scale
+                dbr_loss, clearance_vector = self.model.dbr_module(wp_pred_metric, depth_map, depth_mask)
+                total_loss = total_loss + dbr_loss
+                self.log('train/l_dbr', dbr_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+                avg_clearance = clearance_vector.mean()
+                self.log('train/avg_clearance', avg_clearance, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+            
             self.log('train/l_noise', noise_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         
         # Common logs

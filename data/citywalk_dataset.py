@@ -45,6 +45,35 @@ class CityWalkDataset(Dataset):
         self.search_window = cfg.data.search_window
         self.arrived_threshold = cfg.data.arrived_threshold
         self.arrived_prob = cfg.data.arrived_prob
+        
+        # DBR (Depth Barrier Regularization) support
+        self.use_dbr = getattr(cfg.model, 'use_dbr', False)
+        if self.use_dbr:
+            self.depth_dir = getattr(cfg.data, 'depth_dir', None)
+            self.depth_mode = getattr(cfg.data, 'depth_mode', 'precomputed')  # 'precomputed' or 'online'
+            
+            if self.depth_mode == 'precomputed':
+                if self.depth_dir is None:
+                    raise ValueError("DBR is enabled with precomputed mode but depth_dir is not specified")
+            elif self.depth_mode == 'online':
+                # Load depth model for online inference
+                print("Loading depth model for online inference...")
+                from model.depth_teacher import load_depth_teacher
+                depth_checkpoint = getattr(cfg.data, 'depth_checkpoint', None)
+                if depth_checkpoint is None:
+                    raise ValueError("DBR online mode requires depth_checkpoint in config")
+                self.depth_model = load_depth_teacher(
+                    model_size=getattr(cfg.data, 'depth_model_size', 'small'),
+                    max_depth=getattr(cfg.data, 'depth_max_depth', 20.0),
+                    checkpoint_path=depth_checkpoint,
+                    device='cuda' if torch.cuda.is_available() else 'cpu'
+                )
+                print(f"Depth model loaded successfully ({cfg.data.depth_model_size})")
+            else:
+                raise ValueError(f"Invalid depth_mode: {self.depth_mode}. Use 'precomputed' or 'online'")
+        else:
+            self.depth_dir = None
+            self.depth_mode = None
 
         # Load pose paths
         self.pose_path = [
@@ -64,12 +93,25 @@ class CityWalkDataset(Dataset):
 
         # Load corresponding video paths
         self.video_path = []
+        self.depth_path = []
         for f in self.pose_path:
             video_file = os.path.basename(f).replace(".txt", ".mp4")
             video = os.path.join(self.video_dir, video_file)
             if not os.path.exists(video):
                 raise FileNotFoundError(f"Video file {video} does not exist.")
             self.video_path.append(video)
+            
+            # Load depth paths if DBR is enabled
+            if self.use_dbr:
+                depth_file = os.path.basename(f).replace(".txt", "_depth.npy")
+                depth = os.path.join(self.depth_dir, depth_file)
+                if not os.path.exists(depth):
+                    print(f"Warning: Depth file {depth} does not exist. DBR will be disabled for this video.")
+                    self.depth_path.append(None)
+                else:
+                    self.depth_path.append(depth)
+            else:
+                self.depth_path.append(None)
 
         # Load poses and compute usable counts
         self.poses = []
@@ -92,11 +134,16 @@ class CityWalkDataset(Dataset):
         valid_indices = [i for i, c in enumerate(self.count) if c > 0]
         self.poses = [self.poses[i] for i in valid_indices]
         self.video_path = [self.video_path[i] for i in valid_indices]
+        self.depth_path = [self.depth_path[i] for i in valid_indices]
         self.count = [self.count[i] for i in valid_indices]
         self.step_scale = []
         for pose in self.poses:
             step_scale = np.linalg.norm(np.diff(pose[:, [0, 2]], axis=0), axis=1).mean()
             self.step_scale.append(step_scale)
+        
+        # Load depth data if DBR is enabled (cache in memory or load on-the-fly)
+        self.depth_cache = {}
+        self.depth_cache_mode = getattr(cfg.data, 'depth_cache_mode', 'on_the_fly')  # 'on_the_fly' or 'preload'
 
         # Build the look-up table and video_ranges
         self.lut = []
@@ -117,6 +164,76 @@ class CityWalkDataset(Dataset):
 
     def __len__(self):
         return len(self.lut)
+    
+    def load_depth_frames(self, video_idx, pose_start, last_frame_tensor=None):
+        """
+        Load depth frames corresponding to the pose_start index.
+        
+        Args:
+            video_idx: Index of the video
+            pose_start: Starting pose index
+            last_frame_tensor: (3, H, W) tensor of the last frame (for online mode)
+            
+        Returns:
+            depth_map: (H, W) depth map for the last frame, or None if not available
+            depth_mask: (H, W) boolean mask for valid depth values
+        """
+        if not self.use_dbr:
+            return None, None
+        
+        if self.depth_mode == 'online':
+            # Compute depth on-the-fly using the depth model
+            if last_frame_tensor is None:
+                return None, None
+            
+            try:
+                # Add batch dimension and compute depth
+                frame_batch = last_frame_tensor.unsqueeze(0)  # (1, 3, H, W)
+                with torch.no_grad():
+                    depth_map = self.depth_model.infer_batch_with_padding(frame_batch)  # (1, H, W)
+                depth_map = depth_map.squeeze(0).cpu().numpy()  # (H, W)
+                
+                # Create mask for valid depth values
+                depth_mask = (depth_map > 0.1) & (depth_map < 100.0) & (~np.isnan(depth_map))
+                
+                return depth_map, depth_mask
+            except Exception as e:
+                print(f"Warning: Online depth inference failed: {e}")
+                return None, None
+        
+        elif self.depth_mode == 'precomputed':
+            # Load precomputed depth from disk
+            if self.depth_path[video_idx] is None:
+                return None, None
+            
+            # Load depth data (on-the-fly or from cache)
+            if video_idx not in self.depth_cache:
+                if self.depth_cache_mode == 'preload':
+                    # This would be set during initialization if preloading
+                    return None, None
+                else:
+                    # Load on-the-fly
+                    depth_data = np.load(self.depth_path[video_idx])  # (T, H, W)
+                    # Don't cache to save memory in on-the-fly mode
+            else:
+                depth_data = self.depth_cache[video_idx]
+            
+            # Get the depth frame corresponding to the last observation frame
+            # The last frame index is at pose_start + context_size - 1
+            depth_frame_idx = pose_start + self.context_size - 1
+            
+            # Ensure index is within bounds
+            if depth_frame_idx >= depth_data.shape[0]:
+                depth_frame_idx = depth_data.shape[0] - 1
+            
+            depth_map = depth_data[depth_frame_idx]  # (H, W)
+            
+            # Create mask for valid depth values (non-zero, non-nan)
+            depth_mask = (depth_map > 0.1) & (depth_map < 100.0) & (~np.isnan(depth_map))
+            
+            return depth_map, depth_mask
+        
+        return None, None
 
     def __getitem__(self, index):
         video_idx, pose_start = self.lut[index]
@@ -141,6 +258,11 @@ class CityWalkDataset(Dataset):
 
         # Process frames
         frames = self.process_frames(frames)
+        
+        # Load depth frames if DBR is enabled
+        # For online mode, pass the last frame tensor
+        last_frame_tensor = frames[-1] if self.use_dbr and self.depth_mode == 'online' else None
+        depth_map, depth_mask = self.load_depth_frames(video_idx, pose_start, last_frame_tensor)
 
         # Get pose data
         pose = self.poses[video_idx]
@@ -191,6 +313,11 @@ class CityWalkDataset(Dataset):
             'arrived': arrived,
             'step_scale': step_scale
         }
+        
+        # Add depth data to sample if available
+        if self.use_dbr and depth_map is not None:
+            sample['depth_map'] = torch.tensor(depth_map, dtype=torch.float32)
+            sample['depth_mask'] = torch.tensor(depth_mask, dtype=torch.bool)
 
         # For visualization during validation
         if self.mode in ['val', 'test']:
