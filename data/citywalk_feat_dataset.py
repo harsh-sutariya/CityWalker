@@ -46,6 +46,37 @@ class CityWalkFeatDataset(Dataset):
         self.arrived_threshold = cfg.data.arrived_threshold
         self.arrived_prob = cfg.data.arrived_prob
 
+        # DBR (Depth Barrier Regularization) support
+        self.use_dbr = getattr(cfg.model, 'use_dbr', False)
+        if self.use_dbr:
+            self.depth_dir = getattr(cfg.data, 'depth_dir', None)
+            self.depth_mode = getattr(cfg.data, 'depth_mode', 'precomputed')  # 'precomputed' or 'online'
+            
+            if self.depth_mode == 'precomputed':
+                if self.depth_dir is None:
+                    raise ValueError("DBR is enabled with precomputed mode but depth_dir is not specified")
+                self.depth_cache_mode = getattr(cfg.data, 'depth_cache_mode', 'on_the_fly')
+                self.depth_cache = {}  # Cache for preloaded depth data
+            elif self.depth_mode == 'online':
+                # Load depth model for online inference
+                print("Loading depth model for online inference...")
+                from model.depth_teacher import load_depth_teacher
+                depth_checkpoint = getattr(cfg.data, 'depth_checkpoint', None)
+                if depth_checkpoint is None:
+                    raise ValueError("DBR online mode requires depth_checkpoint in config")
+                self.depth_model = load_depth_teacher(
+                    model_size=getattr(cfg.data, 'depth_model_size', 'small'),
+                    max_depth=getattr(cfg.data, 'depth_max_depth', 20.0),
+                    checkpoint_path=depth_checkpoint,
+                    device='cuda' if torch.cuda.is_available() else 'cpu'
+                )
+                print(f"Depth model loaded successfully ({cfg.data.depth_model_size})")
+            else:
+                raise ValueError(f"Invalid depth_mode: {self.depth_mode}. Use 'precomputed' or 'online'")
+        else:
+            self.depth_dir = None
+            self.depth_mode = None
+
         # Load pose paths
         self.pose_path = [
             os.path.join(self.pose_dir, f)
@@ -70,6 +101,20 @@ class CityWalkFeatDataset(Dataset):
             if not os.path.exists(video):
                 raise FileNotFoundError(f"Video file {video} does not exist.")
             self.video_path.append(video)
+
+        # Load corresponding depth paths if DBR is enabled
+        if self.use_dbr and self.depth_mode == 'precomputed':
+            self.depth_path = []
+            for f in self.pose_path:
+                depth_file = os.path.basename(f).replace(".txt", ".npy")
+                depth_path = os.path.join(self.depth_dir, depth_file)
+                if os.path.exists(depth_path):
+                    self.depth_path.append(depth_path)
+                else:
+                    print(f"Warning: Depth file {depth_path} does not exist. Setting to None.")
+                    self.depth_path.append(None)
+        else:
+            self.depth_path = None
 
         # Load poses and compute usable counts
         self.poses = []
@@ -114,6 +159,81 @@ class CityWalkFeatDataset(Dataset):
 
         # Initialize the video reader cache per worker
         self.video_reader_cache = {'video_idx': None, 'video_reader': None}
+
+    def load_depth_frames(self, video_idx, pose_start, last_frame_tensor=None):
+        """
+        Load depth data for the last observation frame.
+        
+        Args:
+            video_idx: Index of the video
+            pose_start: Starting pose index
+            last_frame_tensor: Last RGB frame tensor (for online depth inference)
+            
+        Returns:
+            depth_map: (H, W) depth values in meters
+            depth_mask: (H, W) boolean mask for valid depth pixels
+        """
+        if not self.use_dbr:
+            return None, None
+            
+        if self.depth_mode == 'online':
+            # Online depth inference
+            if last_frame_tensor is None:
+                print("Warning: Online depth mode requires last_frame_tensor")
+                return None, None
+            
+            try:
+                # Ensure tensor is on the right device and format
+                if last_frame_tensor.dim() == 3:  # (C, H, W)
+                    last_frame_tensor = last_frame_tensor.unsqueeze(0)  # (1, C, H, W)
+                
+                # Predict depth
+                with torch.no_grad():
+                    depth_map = self.depth_model.infer_batch_with_padding(last_frame_tensor)
+                    depth_map = depth_map.squeeze(0).cpu().numpy()  # (H, W)
+                
+                # Create mask for valid depth values
+                depth_mask = (depth_map > 0.1) & (depth_map < 100.0) & (~np.isnan(depth_map))
+                
+                return depth_map, depth_mask
+                
+            except Exception as e:
+                print(f"Warning: Online depth inference failed: {e}")
+                return None, None
+        
+        elif self.depth_mode == 'precomputed':
+            # Load precomputed depth from disk
+            if self.depth_path[video_idx] is None:
+                return None, None
+            
+            # Load depth data (on-the-fly or from cache)
+            if video_idx not in self.depth_cache:
+                if self.depth_cache_mode == 'preload':
+                    # This would be set during initialization if preloading
+                    return None, None
+                else:
+                    # Load on-the-fly
+                    depth_data = np.load(self.depth_path[video_idx])  # (T, H, W)
+                    # Don't cache to save memory in on-the-fly mode
+            else:
+                depth_data = self.depth_cache[video_idx]
+            
+            # Get the depth frame corresponding to the last observation frame
+            # The last frame index is at pose_start + context_size - 1
+            depth_frame_idx = pose_start + self.context_size - 1
+            
+            # Ensure index is within bounds
+            if depth_frame_idx >= depth_data.shape[0]:
+                depth_frame_idx = depth_data.shape[0] - 1
+            
+            depth_map = depth_data[depth_frame_idx]  # (H, W)
+            
+            # Create mask for valid depth values (non-zero, non-nan)
+            depth_mask = (depth_map > 0.1) & (depth_map < 100.0) & (~np.isnan(depth_map))
+            
+            return depth_map, depth_mask
+        
+        return None, None
 
     def __len__(self):
         return len(self.lut)
@@ -194,6 +314,16 @@ class CityWalkFeatDataset(Dataset):
             'arrived': arrived,
             'step_scale': step_scale
         }
+
+        # Add depth data if DBR is enabled
+        if self.use_dbr:
+            # Load depth data for the last observation frame
+            last_frame_tensor = input_frames[-1] if self.depth_mode == 'online' else None
+            depth_map, depth_mask = self.load_depth_frames(video_idx, pose_start, last_frame_tensor)
+            
+            if depth_map is not None and depth_mask is not None:
+                sample['depth_map'] = torch.tensor(depth_map, dtype=torch.float32)
+                sample['depth_mask'] = torch.tensor(depth_mask, dtype=torch.bool)
 
         # For visualization during validation
         if self.mode in ['val', 'test']:

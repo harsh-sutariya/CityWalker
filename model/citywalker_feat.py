@@ -18,6 +18,12 @@ class CityWalkerFeat(nn.Module):
         self.do_rgb_normalize = cfg.model.do_rgb_normalize
         self.do_resize = cfg.model.do_resize
         self.output_coordinate_repr = cfg.model.output_coordinate_repr  # 'polar' or 'euclidean'
+        
+        # DBR (Depth Barrier Regularization) support
+        self.use_dbr = getattr(cfg.model, 'use_dbr', False)
+        if self.use_dbr:
+            from model.dbr import DBRModule
+            self.dbr_module = DBRModule(cfg)
 
         # if self.obs_encoder_type.startswith("dinov2"):
         self.crop = cfg.model.obs_encoder.crop
@@ -71,11 +77,14 @@ class CityWalkerFeat(nn.Module):
         self.wp_predictor = nn.Linear(32, self.len_traj_pred * 2)
         self.arrive_predictor = nn.Linear(32, 1)
 
-    def forward(self, obs, cord, future_obs=None):
+    def forward(self, obs, cord, future_obs=None, depth_map=None, depth_mask=None):
         """
         Args:
             obs: (B, N, 3, H, W) tensor
             cord: (B, N, 2) tensor
+            future_obs: (B, N, 3, H, W) tensor (optional)
+            depth_map: (B, H, W) tensor (optional, for DBR)
+            depth_mask: (B, H, W) tensor (optional, for DBR)
         """
         B, N, _, H, W = obs.shape
         obs = obs.view(B * N, 3, H, W)

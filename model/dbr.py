@@ -5,7 +5,6 @@ This module implements depth-based safety regularization for waypoint prediction
 It computes a polar clearance vector from monocular depth and penalizes predicted 
 waypoint directions whose forward clearance falls below a safety margin.
 
-Reference: Section 3 of plan.tex
 """
 
 import torch
