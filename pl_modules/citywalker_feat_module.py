@@ -31,6 +31,9 @@ class CityWalkerFeatModule(pl.LightningModule):
         self.direction_loss_weight = cfg.training.direction_loss_weight
         self.feature_loss_weight = cfg.training.feature_loss_weight
         
+        # DBR support
+        self.use_dbr = getattr(cfg.model, 'use_dbr', False)
+        
         # Visualization settings
         self.val_num_visualize = cfg.validation.num_visualize
         self.test_num_visualize = cfg.testing.num_visualize
@@ -45,8 +48,8 @@ class CityWalkerFeatModule(pl.LightningModule):
             self.test_catetories = ['crowd', 'person_close_by', 'turn', 'action_target_mismatch', 'crossing', 'other']
             self.num_categories = len(self.test_catetories)
 
-    def forward(self, obs, cord, future_obs):
-        return self.model(obs, cord, future_obs)
+    def forward(self, obs, cord, future_obs, depth_map=None, depth_mask=None):
+        return self.model(obs, cord, future_obs, depth_map, depth_mask)
     
     def training_step(self, batch, batch_idx):
         obs = batch['video_frames']
@@ -56,13 +59,29 @@ class CityWalkerFeatModule(pl.LightningModule):
         else:
             future_obs = None
         
-        wp_pred, arrive_pred, feature_pred, feature_gt = self(obs, cord, future_obs)
+        # Extract depth data if DBR is enabled
+        depth_map = batch.get('depth_map', None) if self.use_dbr else None
+        depth_mask = batch.get('depth_mask', None) if self.use_dbr else None
+        
+        wp_pred, arrive_pred, feature_pred, feature_gt = self(obs, cord, future_obs, depth_map, depth_mask)
         losses = self.compute_loss(wp_pred, arrive_pred, feature_pred, feature_gt, batch)
         waypoints_loss = losses['waypoints_loss']
         arrived_loss = losses['arrived_loss']
         direction_loss = losses['direction_loss']
         feature_loss = losses['feature_loss']
         total_loss = waypoints_loss + arrived_loss + self.direction_loss_weight * direction_loss + feature_loss * self.feature_loss_weight
+        
+        # Add DBR loss if enabled
+        if self.use_dbr and depth_map is not None:
+            # Scale waypoints back to metric space for DBR
+            step_scale = batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
+            wp_pred_metric = wp_pred * step_scale
+            dbr_loss, clearance_vector = self.model.dbr_module(wp_pred_metric, depth_map, depth_mask)
+            total_loss = total_loss + dbr_loss
+            self.log('train/l_dbr', dbr_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+            # Log average clearance for monitoring
+            avg_clearance = clearance_vector.mean()
+            self.log('train/avg_clearance', avg_clearance, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         
         # Common logs
         self.log('train/l_wp', waypoints_loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
@@ -79,7 +98,12 @@ class CityWalkerFeatModule(pl.LightningModule):
             future_obs = batch['future_video_frames']
         else:
             future_obs = None
-        wp_pred, arrive_pred, feature_pred, feature_gt = self(obs, cord, future_obs)
+        
+        # Extract depth data if DBR is enabled
+        depth_map = batch.get('depth_map', None) if self.use_dbr else None
+        depth_mask = batch.get('depth_mask', None) if self.use_dbr else None
+        
+        wp_pred, arrive_pred, feature_pred, feature_gt = self(obs, cord, future_obs, depth_map, depth_mask)
         losses = self.compute_loss(wp_pred, arrive_pred, feature_pred, feature_gt, batch)
         l1_loss = losses['waypoints_loss']
         direction_loss = losses['direction_loss']
@@ -120,8 +144,12 @@ class CityWalkerFeatModule(pl.LightningModule):
             future_obs = None
         B, T, _, _, _ = obs.shape
         
+        # Extract depth data if DBR is enabled
+        depth_map = batch.get('depth_map', None) if self.use_dbr else None
+        depth_mask = batch.get('depth_mask', None) if self.use_dbr else None
+        
         if self.datatype == "citywalk":
-            wp_pred, arrive_pred, _, _ = self(obs, cord, future_obs)
+            wp_pred, arrive_pred, _, _ = self(obs, cord, future_obs, depth_map, depth_mask)
             # Compute L1 loss for waypoints
             waypoints_target = batch['waypoints']
             l1_loss = F.l1_loss(wp_pred, waypoints_target, reduction='mean').item()
@@ -160,7 +188,7 @@ class CityWalkerFeatModule(pl.LightningModule):
             self.test_metrics['mean_angle'].append(mean_angle)
         elif self.datatype == "teleop":
             category = batch['categories']
-            wp_pred, arrive_pred, _, _ = self(obs, cord, future_obs)
+            wp_pred, arrive_pred, _, _ = self(obs, cord, future_obs, depth_map, depth_mask)
             wp_pred *= batch['step_scale'].unsqueeze(-1).unsqueeze(-1)
             
             # Compute L1 loss for waypoints

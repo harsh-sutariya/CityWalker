@@ -106,7 +106,7 @@ class CityWalkFeatDataset(Dataset):
         if self.use_dbr and self.depth_mode == 'precomputed':
             self.depth_path = []
             for f in self.pose_path:
-                depth_file = os.path.basename(f).replace(".txt", ".npy")
+                depth_file = os.path.basename(f).replace(".txt", "_depth.npy")
                 depth_path = os.path.join(self.depth_dir, depth_file)
                 if os.path.exists(depth_path):
                     self.depth_path.append(depth_path)
