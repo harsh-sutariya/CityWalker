@@ -4,7 +4,7 @@ project:
   result_dir: 'results'
 
 training:
-  batch_size: 8
+  batch_size: 4
   max_epochs: 10
   gpus: 4
   amp: true  
@@ -52,7 +52,7 @@ data:
   type: citywalk_feat
   video_dir: 'dataset/citywalk_2min/videos'
   pose_dir: 'dataset/citywalk_2min/poses'
-  num_workers: 8  # Reduced for 4-GPU training (8 workers per GPU = 32 total)
+  num_workers: 4  # Reduced for 4-GPU training (8 workers per GPU = 32 total)
   pose_fps: 5
   video_fps: 30
   target_fps: 1
