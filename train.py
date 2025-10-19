@@ -108,7 +108,8 @@ def main():
             wandb_logger = WandbLogger(
                 project=cfg.project.name,
                 name=cfg.project.run_name,
-                save_dir=result_dir
+                save_dir=result_dir,
+                resume="never"  # Force new run instead of resuming existing one
             )
             logger = wandb_logger
             print("WandbLogger initialized.")
