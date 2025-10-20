@@ -342,8 +342,14 @@ class CityWalkFeatDataset(Dataset):
             depth_map, depth_mask = self.load_depth_frames(video_idx, pose_start, last_frame_tensor)
             
             if depth_map is not None and depth_mask is not None:
-                sample['depth_map'] = torch.tensor(depth_map, dtype=torch.float32)
-                sample['depth_mask'] = torch.tensor(depth_mask, dtype=torch.bool)
+                # Ensure consistent shape - depth maps should be 2D (H, W)
+                if depth_map.ndim != 2 or depth_mask.ndim != 2:
+                    print(f"Warning: Invalid depth shape - depth_map: {depth_map.shape}, depth_mask: {depth_mask.shape}")
+                    # Skip depth for this sample
+                else:
+                    # Ensure tensors are contiguous and don't share memory to avoid collation issues
+                    sample['depth_map'] = torch.from_numpy(np.ascontiguousarray(depth_map)).float().clone()
+                    sample['depth_mask'] = torch.from_numpy(np.ascontiguousarray(depth_mask)).bool().clone()
 
         # For visualization during validation
         if self.mode in ['val', 'test']:
