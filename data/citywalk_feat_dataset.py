@@ -113,6 +113,21 @@ class CityWalkFeatDataset(Dataset):
                 else:
                     print(f"Warning: Depth file {depth_path} does not exist. Setting to None.")
                     self.depth_path.append(None)
+                    
+            # Preload depth data if cache mode is 'preload'
+            if self.depth_cache_mode == 'preload':
+                print("Preloading depth data...")
+                for video_idx, depth_path in enumerate(tqdm(self.depth_path, desc="Loading depth files")):
+                    if depth_path is not None:
+                        try:
+                            depth_data = np.load(depth_path)  # (T, H, W)
+                            self.depth_cache[video_idx] = depth_data
+                        except Exception as e:
+                            print(f"Warning: Failed to preload depth file {depth_path}: {e}")
+                            self.depth_cache[video_idx] = None
+                    else:
+                        self.depth_cache[video_idx] = None
+                print(f"Preloaded depth data for {len(self.depth_cache)} videos")
         else:
             self.depth_path = None
 
@@ -203,20 +218,25 @@ class CityWalkFeatDataset(Dataset):
         
         elif self.depth_mode == 'precomputed':
             # Load precomputed depth from disk
-            if self.depth_path[video_idx] is None:
+            if self.depth_path is None or self.depth_path[video_idx] is None:
                 return None, None
             
             # Load depth data (on-the-fly or from cache)
-            if video_idx not in self.depth_cache:
-                if self.depth_cache_mode == 'preload':
-                    # This would be set during initialization if preloading
-                    return None, None
-                else:
-                    # Load on-the-fly
-                    depth_data = np.load(self.depth_path[video_idx])  # (T, H, W)
-                    # Don't cache to save memory in on-the-fly mode
-            else:
+            if video_idx in self.depth_cache:
+                # Use cached data
                 depth_data = self.depth_cache[video_idx]
+                if depth_data is None:
+                    return None, None
+            elif self.depth_cache_mode == 'preload':
+                # Preload mode but not in cache - data should have been preloaded
+                return None, None
+            else:
+                # Load on-the-fly
+                try:
+                    depth_data = np.load(self.depth_path[video_idx])  # (T, H, W)
+                except Exception as e:
+                    print(f"Warning: Failed to load depth file {self.depth_path[video_idx]}: {e}")
+                    return None, None
             
             # Get the depth frame corresponding to the last observation frame
             # The last frame index is at pose_start + context_size - 1

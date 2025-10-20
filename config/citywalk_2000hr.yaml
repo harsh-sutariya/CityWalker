@@ -1,6 +1,6 @@
 project:
-  name: 'CityWalker'
-  run_name: 'train_2000hr'
+  name: 'CityWalker'  
+  run_name: 'train_2000hr_fresh'
   result_dir: 'results'
 
 training:

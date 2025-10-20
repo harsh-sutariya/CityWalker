@@ -1,6 +1,6 @@
 project:
   name: 'CityWalker'
-  run_name: 'train_dbr'
+  run_name: 'train_dbr_fixed'
   result_dir: 'results'
 
 training:
@@ -81,7 +81,7 @@ data:
   # Directory containing precomputed depth maps (on /vast for large storage)
   depth_dir: '/vast/hs5580/data/citywalker/depths'
   # Whether to cache depth in memory ('on_the_fly' or 'preload')
-  depth_cache_mode: 'preload'
+  depth_cache_mode: 'on_the_fly'
   
   num_workers: 4
   pose_fps: 5
