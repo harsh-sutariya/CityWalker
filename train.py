@@ -105,14 +105,26 @@ def main():
     if use_wandb:
         try:
             from pytorch_lightning.loggers import WandbLogger  # Import here to handle ImportError
+            import wandb
+            
+            # Generate unique run ID to prevent any accidental resuming
+            # Use job ID from environment if available, otherwise timestamp
+            job_id = os.environ.get('SLURM_JOB_ID', None)
+            if job_id:
+                run_id = f"{cfg.project.run_name}_{job_id}"
+            else:
+                import time
+                run_id = f"{cfg.project.run_name}_{int(time.time())}"
+            
             wandb_logger = WandbLogger(
                 project=cfg.project.name,
-                name=cfg.project.run_name,
+                name=cfg.project.run_name,  # Display name in UI
+                id=run_id,  # Unique ID to prevent resuming
                 save_dir=result_dir,
                 resume="never"  # Force new run instead of resuming existing one
             )
             logger = wandb_logger
-            print("WandbLogger initialized.")
+            print(f"WandbLogger initialized with unique ID: {run_id}")
         except ImportError:
             print("Wandb is not installed. Skipping Wandb logging.")
 

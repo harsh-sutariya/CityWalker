@@ -36,13 +36,24 @@ class CityWalkFeatDataset(Dataset):
         
         # Construct full paths using vast_path + relative paths
         vast_path = getattr(cfg.data, 'vast_path', '')
-        if vast_path:
+        frodobots_structure = getattr(cfg.data, 'frodobots_structure', False)
+        
+        if frodobots_structure and vast_path:
+            # Special handling for frodobots complex directory structure
+            # Videos are in: part_X/output_rides_X/ride_XXXXX/recordings_converted_2min/
+            # Poses are in: part_X/ride_XXXXX/dpvo_poses/
+            self.video_dir = vast_path  # We'll scan subdirectories
+            self.pose_dir = vast_path   # We'll scan subdirectories
+            self.frodobots_mode = True
+        elif vast_path:
             self.video_dir = os.path.join(vast_path, cfg.data.video_dir)
             self.pose_dir = os.path.join(vast_path, cfg.data.pose_dir)
+            self.frodobots_mode = False
         else:
             # Fallback to old behavior for backward compatibility
             self.video_dir = cfg.data.video_dir
             self.pose_dir = cfg.data.pose_dir
+            self.frodobots_mode = False
         self.context_size = cfg.model.obs_encoder.context_size
         self.wp_length = cfg.model.decoder.len_traj_pred
         self.video_fps = cfg.data.video_fps
@@ -91,11 +102,27 @@ class CityWalkFeatDataset(Dataset):
             self.depth_mode = None
 
         # Load pose paths
-        self.pose_path = [
-            os.path.join(self.pose_dir, f)
-            for f in sorted(os.listdir(self.pose_dir))
-            if f.endswith('.txt')
-        ]
+        if self.frodobots_mode:
+            # For frodobots: scan part_X/ride_XXXXX/dpvo_poses/ directories
+            self.pose_path = []
+            for part_dir in sorted(os.listdir(self.pose_dir)):
+                if part_dir.startswith('part_'):
+                    part_path = os.path.join(self.pose_dir, part_dir)
+                    if os.path.isdir(part_path):
+                        for ride_dir in sorted(os.listdir(part_path)):
+                            if ride_dir.startswith('ride_'):
+                                dpvo_poses_path = os.path.join(part_path, ride_dir, 'dpvo_poses')
+                                if os.path.isdir(dpvo_poses_path):
+                                    for f in sorted(os.listdir(dpvo_poses_path)):
+                                        if f.endswith('.txt'):
+                                            self.pose_path.append(os.path.join(dpvo_poses_path, f))
+        else:
+            # Normal structure: flat directory with pose files
+            self.pose_path = [
+                os.path.join(self.pose_dir, f)
+                for f in sorted(os.listdir(self.pose_dir))
+                if f.endswith('.txt')
+            ]
         print(len(self.pose_path))
         if mode == 'train':
             self.pose_path = self.pose_path[:cfg.data.num_train]
@@ -110,7 +137,32 @@ class CityWalkFeatDataset(Dataset):
         self.video_path = []
         for f in self.pose_path:
             video_file = os.path.basename(f).replace(".txt", ".mp4")
-            video = os.path.join(self.video_dir, video_file)
+            
+            if self.frodobots_mode:
+                # For frodobots: pose is in part_X/ride_XXXXX/dpvo_poses/
+                # Video is in part_X/output_rides_X/ride_XXXXX/recordings_converted_2min/
+                # Extract part number and ride directory from pose path
+                pose_parts = f.split(os.sep)
+                for i, part in enumerate(pose_parts):
+                    if part.startswith('part_'):
+                        part_num = part.split('_')[1]  # Extract X from part_X
+                        ride_dir = pose_parts[i + 1]   # Get ride_XXXXX directory
+                        video_path = os.path.join(
+                            self.video_dir, 
+                            f'part_{part_num}', 
+                            f'output_rides_{part_num}', 
+                            ride_dir, 
+                            'recordings_converted_2min', 
+                            video_file
+                        )
+                        break
+                else:
+                    raise ValueError(f"Could not parse frodobots path structure from {f}")
+                video = video_path
+            else:
+                # Normal structure: video in same directory structure as pose
+                video = os.path.join(self.video_dir, video_file)
+                
             if not os.path.exists(video):
                 raise FileNotFoundError(f"Video file {video} does not exist.")
             self.video_path.append(video)

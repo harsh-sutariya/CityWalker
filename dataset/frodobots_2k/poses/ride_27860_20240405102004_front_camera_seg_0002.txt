@@ -1,1 +1,0 @@
-/vast/hs5580/data/frodobots_2k/extracted/part_10/ride_27860_20240405102004/dpvo_poses/ride_27860_20240405102004_front_camera_seg_0002.txt
