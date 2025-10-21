@@ -50,12 +50,13 @@ model:
 
 data:
   type: citywalk_feat
-  video_dir: 'dataset/citywalk_2min/videos'
-  pose_dir: 'dataset/citywalk_2min/poses'
+  # frodobots_2k dataset is still stored locally, not on vast
+  video_dir: 'dataset/frodobots_2k/videos'
+  pose_dir: 'dataset/frodobots_2k/poses'
   num_workers: 2
-  pose_fps: 5
-  video_fps: 30
-  target_fps: 1
+  pose_fps: 1   # FrodoBots poses are at 1 Hz
+  video_fps: 30  # Original video frame rate
+  target_fps: 1  # Target processing frequency
   num_train: 20
   num_val: 5
   num_test: 0

@@ -50,8 +50,11 @@ model:
 
 data:
   type: citywalk_feat
-  video_dir: 'dataset/citywalk_2min/videos'
-  pose_dir: 'dataset/citywalk_2min/poses'
+  # Root path to vast storage where datasets are stored
+  vast_path: '/vast/hs5580/data/citywalker'
+  # Relative paths from vast_path root (videos are directly in citywalk_2min/, poses in citywalk_2min/poses/)
+  video_dir: 'citywalk_2min'
+  pose_dir: 'citywalk_2min/poses'
   num_workers: 4  # Reduced for 4-GPU training (8 workers per GPU = 32 total)
   pose_fps: 5
   video_fps: 30

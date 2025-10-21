@@ -13,8 +13,16 @@ class TeleopDataset(Dataset):
         super().__init__()
         self.cfg = cfg
         self.mode = mode
-        self.pose_dir = cfg.data.pose_dir
-        self.image_root_dir = cfg.data.image_root_dir
+        
+        # Construct full paths using vast_path + relative paths
+        vast_path = getattr(cfg.data, 'vast_path', '')
+        if vast_path:
+            self.pose_dir = os.path.join(vast_path, cfg.data.pose_dir)
+            self.image_root_dir = os.path.join(vast_path, cfg.data.image_root_dir)
+        else:
+            # Fallback to old behavior for backward compatibility
+            self.pose_dir = cfg.data.pose_dir
+            self.image_root_dir = cfg.data.image_root_dir
         self.context_size = cfg.model.obs_encoder.context_size
         self.wp_length = cfg.model.decoder.len_traj_pred
         self.target_fps = cfg.data.target_fps

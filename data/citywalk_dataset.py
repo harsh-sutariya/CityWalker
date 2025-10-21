@@ -33,8 +33,16 @@ class CityWalkDataset(Dataset):
         super().__init__()
         self.cfg = cfg
         self.mode = mode
-        self.video_dir = cfg.data.video_dir
-        self.pose_dir = cfg.data.pose_dir
+        
+        # Construct full paths using vast_path + relative paths
+        vast_path = getattr(cfg.data, 'vast_path', '')
+        if vast_path:
+            self.video_dir = os.path.join(vast_path, cfg.data.video_dir)
+            self.pose_dir = os.path.join(vast_path, cfg.data.pose_dir)
+        else:
+            # Fallback to old behavior for backward compatibility
+            self.video_dir = cfg.data.video_dir
+            self.pose_dir = cfg.data.pose_dir
         self.context_size = cfg.model.obs_encoder.context_size
         self.wp_length = cfg.model.decoder.len_traj_pred
         self.video_fps = cfg.data.video_fps
@@ -49,7 +57,12 @@ class CityWalkDataset(Dataset):
         # DBR (Depth Barrier Regularization) support
         self.use_dbr = getattr(cfg.model, 'use_dbr', False)
         if self.use_dbr:
-            self.depth_dir = getattr(cfg.data, 'depth_dir', None)
+            depth_dir_config = getattr(cfg.data, 'depth_dir', None)
+            if depth_dir_config and vast_path:
+                self.depth_dir = os.path.join(vast_path, depth_dir_config)
+            else:
+                # Fallback to absolute path or original config
+                self.depth_dir = depth_dir_config
             self.depth_mode = getattr(cfg.data, 'depth_mode', 'precomputed')  # 'precomputed' or 'online'
             
             if self.depth_mode == 'precomputed':

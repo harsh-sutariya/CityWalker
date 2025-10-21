@@ -50,6 +50,7 @@ model:
 
 data:
   type: citywalk_feat
+  # frodobots_2k dataset is still stored locally, not on vast
   video_dir: 'dataset/frodobots_2k/videos'
   pose_dir: 'dataset/frodobots_2k/poses'
   num_workers: 8  # Reduced for 4-GPU training (8 workers per GPU = 32 total)

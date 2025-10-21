@@ -50,6 +50,7 @@ model:
 
 data:
   type: teleop
+  # teleop dataset location TBD - using local paths for now
   image_root_dir: 'dataset/teleop/obs'
   pose_dir: 'dataset/teleop/pose_label'
   num_workers: 15
